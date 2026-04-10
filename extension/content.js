@@ -18,6 +18,11 @@
   const isLinkedIn = host === "linkedin.com";
   const isReddit = host === "reddit.com" || host === "old.reddit.com" || host === "new.reddit.com";
 
+  /** Single floating host for “check AI” on Instagram Reels (syncs to the primary visible video). */
+  let reelAiHostEl = null;
+  let reelAiBoundVideo = null;
+  let reelAiPanelEl = null;
+
   const IG_RESERVED = new Set([
     "p",
     "reel",
@@ -189,6 +194,72 @@
         background: #b91c1c !important;
         border: 1px solid #fca5a5 !important;
         color: #ffffff !important;
+      }
+
+      /* Instagram Reel: Veritas AI check (top-right over video) */
+      .veritas-reel-ai-host {
+        position: fixed;
+        pointer-events: none;
+        z-index: 2147483647;
+        box-sizing: border-box;
+      }
+      .veritas-reel-ai-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        pointer-events: auto;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 7px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(236, 72, 153, 0.55);
+        background: rgba(0, 0, 0, 0.5);
+        color: #fbcfe8;
+        cursor: pointer;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+      }
+      .veritas-reel-ai-btn:hover:not(:disabled) {
+        background: rgba(236, 72, 153, 0.28);
+        color: #fff;
+      }
+      .veritas-reel-ai-btn:disabled {
+        opacity: 0.7;
+        cursor: wait;
+      }
+      .veritas-reel-ai-panel {
+        position: absolute;
+        left: 8px;
+        right: 8px;
+        bottom: 52px;
+        max-height: 42vh;
+        overflow: auto;
+        pointer-events: auto;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(10, 10, 10, 0.94);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      }
+      .veritas-reel-ai-panel .veritas-card {
+        margin-top: 0;
+        border: none;
+        border-radius: 14px;
+      }
+      .veritas-reel-ai-error {
+        position: absolute;
+        left: 8px;
+        right: 8px;
+        bottom: 52px;
+        pointer-events: auto;
+        padding: 10px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+        color: #fecaca;
+        background: rgba(127, 29, 29, 0.85);
+        border: 1px solid rgba(252, 165, 165, 0.4);
       }
     `;
     document.documentElement.appendChild(style);
@@ -553,6 +624,7 @@
       a.setAttribute(IG_TAG, "1");
       attachAccountScoreBadge(a, handle, isInstagramReelSurface());
     }
+    updateInstagramReelAiOverlay();
   }
 
   function scanXAccountBadges() {
@@ -725,6 +797,166 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
+  }
+
+  function primaryInstagramReelVideo() {
+    let best = null;
+    let bestInter = 0;
+    for (const v of document.querySelectorAll("video")) {
+      const r = v.getBoundingClientRect();
+      if (r.width < 100 || r.height < 100) continue;
+      const iw = Math.max(0, Math.min(r.right, window.innerWidth) - Math.max(r.left, 0));
+      const ih = Math.max(0, Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0));
+      const inter = iw * ih;
+      if (inter > bestInter) {
+        bestInter = inter;
+        best = v;
+      }
+    }
+    return bestInter > 8000 ? best : null;
+  }
+
+  function reelCaptionContext(video) {
+    const article = video.closest("article");
+    if (article) {
+      const t = postTextFromElement(article);
+      if (t && t.length > 8) return t.slice(0, 4500);
+    }
+    let el = video.parentElement;
+    for (let i = 0; i < 14 && el; i++) {
+      const t = (el.innerText || "").trim();
+      if (t.length > 24) return t.slice(0, 4500);
+      el = el.parentElement;
+    }
+    return "";
+  }
+
+  function buildReelAnalyzeText(video) {
+    const caption = reelCaptionContext(video);
+    const header =
+      "CONTENT: Instagram Reel (short-form video). The model cannot see pixels; use caption, hashtags, and any visible UI text below.\n" +
+      "TASK: Estimate whether this content is likely AI-generated or synthetic (e.g. deepfake, full AI video, or heavily AI-altered) versus authentic human-recorded footage.\n\n" +
+      "CAPTION / ON-PAGE TEXT:\n";
+    const body =
+      caption ||
+      "(No caption extracted from the page — give a cautious generic assessment for short-form vertical video.)";
+    return `${header}${body}`;
+  }
+
+  function clearReelAiPanel() {
+    if (!reelAiHostEl) return;
+    reelAiHostEl.querySelectorAll(".veritas-reel-ai-panel, .veritas-reel-ai-error").forEach((n) => n.remove());
+    reelAiPanelEl = null;
+  }
+
+  function removeInstagramReelAiOverlay() {
+    if (reelAiHostEl) {
+      try {
+        reelAiHostEl.__veritas_ro?.disconnect();
+      } catch {
+        /* ignore */
+      }
+      const onSync = reelAiHostEl.__veritas_onSync;
+      if (typeof onSync === "function") {
+        window.removeEventListener("scroll", onSync, true);
+        window.removeEventListener("resize", onSync);
+      }
+      reelAiHostEl.remove();
+      reelAiHostEl = null;
+    }
+    reelAiBoundVideo = null;
+    reelAiPanelEl = null;
+  }
+
+  function syncReelAiHostRect(video) {
+    if (!reelAiHostEl || !video || !video.isConnected) return;
+    const r = video.getBoundingClientRect();
+    if (r.width < 80 || r.height < 80) {
+      reelAiHostEl.style.display = "none";
+      return;
+    }
+    reelAiHostEl.style.display = "";
+    reelAiHostEl.style.left = `${r.left}px`;
+    reelAiHostEl.style.top = `${r.top}px`;
+    reelAiHostEl.style.width = `${r.width}px`;
+    reelAiHostEl.style.height = `${r.height}px`;
+  }
+
+  function updateInstagramReelAiOverlay() {
+    if (!isInstagram || !isInstagramReelSurface()) {
+      removeInstagramReelAiOverlay();
+      return;
+    }
+    const video = primaryInstagramReelVideo();
+    if (!video) {
+      removeInstagramReelAiOverlay();
+      return;
+    }
+
+    if (!reelAiHostEl) {
+      reelAiHostEl = document.createElement("div");
+      reelAiHostEl.className = "veritas-reel-ai-host";
+      reelAiHostEl.setAttribute("data-veritas-reel-ai-host", "1");
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "veritas-reel-ai-btn";
+      btn.textContent = "Veritas AI";
+      btn.title = "Check caption/context for likely AI-generated or synthetic video (Veritas API)";
+      btn.addEventListener("click", async () => {
+        const v = reelAiBoundVideo;
+        if (!v || !v.isConnected) return;
+        clearReelAiPanel();
+        btn.disabled = true;
+        const prev = btn.textContent;
+        btn.textContent = "…";
+        try {
+          const text = buildReelAnalyzeText(v);
+          const result = await analyze(text);
+          const card = renderCard(result);
+          const panel = document.createElement("div");
+          panel.className = "veritas-reel-ai-panel";
+          panel.appendChild(card);
+          reelAiHostEl.appendChild(panel);
+          reelAiPanelEl = panel;
+        } catch {
+          const err = document.createElement("div");
+          err.className = "veritas-reel-ai-error";
+          err.textContent =
+            "Veritas AI unreachable. Start the API (e.g. backend on :5000) or check extension config.";
+          reelAiHostEl.appendChild(err);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = prev;
+        }
+      });
+
+      reelAiHostEl.appendChild(btn);
+      document.body.appendChild(reelAiHostEl);
+
+      const onSync = () => syncReelAiHostRect(reelAiBoundVideo);
+      reelAiHostEl.__veritas_onSync = onSync;
+      window.addEventListener("scroll", onSync, true);
+      window.addEventListener("resize", onSync);
+      try {
+        reelAiHostEl.__veritas_ro = new ResizeObserver(onSync);
+      } catch {
+        reelAiHostEl.__veritas_ro = null;
+      }
+    }
+
+    if (reelAiBoundVideo !== video) {
+      reelAiBoundVideo = video;
+      clearReelAiPanel();
+      try {
+        reelAiHostEl.__veritas_ro?.disconnect();
+        reelAiHostEl.__veritas_ro?.observe(video);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    syncReelAiHostRect(video);
   }
 
   async function processPost(el) {

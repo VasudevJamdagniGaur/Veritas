@@ -34,12 +34,23 @@ function getEnv() {
   return parsed.data;
 }
 
+function cleanSecret(v) {
+  if (v == null) return "";
+  let s = String(v).trim();
+  if (s.charCodeAt(0) === 0xfeff) s = s.slice(1).trim();
+  return s;
+}
+
 /** Resolved API key for OpenAI (OPENAI_API_KEY, or REACT_APP_OPENAI_API_KEY if the former is empty). */
 function resolveOpenAiApiKey(env) {
-  const a = env.OPENAI_API_KEY && String(env.OPENAI_API_KEY).trim();
+  const a = cleanSecret(env.OPENAI_API_KEY);
   if (a) return a;
-  const b = env.REACT_APP_OPENAI_API_KEY && String(env.REACT_APP_OPENAI_API_KEY).trim();
-  return b || "";
+  const b = cleanSecret(env.REACT_APP_OPENAI_API_KEY);
+  if (b) return b;
+  // Fallback if env was set only on process.env after getEnv() snapshot (should be rare).
+  return (
+    cleanSecret(process.env.OPENAI_API_KEY) || cleanSecret(process.env.REACT_APP_OPENAI_API_KEY)
+  );
 }
 
 module.exports = { getEnv, resolveOpenAiApiKey };

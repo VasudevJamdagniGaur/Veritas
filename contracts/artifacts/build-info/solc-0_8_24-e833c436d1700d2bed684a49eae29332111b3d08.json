@@ -1,0 +1,36 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_24-e833c436d1700d2bed684a49eae29332111b3d08",
+  "solcVersion": "0.8.24",
+  "solcLongVersion": "0.8.24+commit.e11b9ed9",
+  "compilerType": "solc",
+  "userSourceNameMap": {
+    "contracts/VeritasTrust.sol": "project/contracts/VeritasTrust.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "shanghai",
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode",
+            "evm.deployedBytecode",
+            "evm.methodIdentifiers",
+            "metadata"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/VeritasTrust.sol": {
+        "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.24;\n\ncontract VeritasTrust {\n    mapping(address => bool) public verifiedUsers;\n    mapping(address => uint256) public trustScore;\n\n    event UserVerified(address indexed user);\n    event TrustScoreUpdated(address indexed user, uint256 score);\n\n    function setVerified(address user, bool verified) external {\n        verifiedUsers[user] = verified;\n        emit UserVerified(user);\n    }\n\n    function setTrustScore(address user, uint256 score) external {\n        require(score <= 100, \"score out of range\");\n        trustScore[user] = score;\n        emit TrustScoreUpdated(user, score);\n    }\n}\n\n"
+      }
+    }
+  }
+}

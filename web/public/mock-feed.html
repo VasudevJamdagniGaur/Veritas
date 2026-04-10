@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Veritas Mock Feed</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+        background: #0f1115;
+        color: #e5e7eb;
+      }
+      .wrap {
+        max-width: 820px;
+        margin: 0 auto;
+        padding: 24px 16px 60px;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .title {
+        font-size: 22px;
+        font-weight: 700;
+      }
+      .sub {
+        font-size: 13px;
+        color: #9ca3af;
+        margin-top: 6px;
+      }
+      article {
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 18px;
+        padding: 14px 14px;
+        background: rgba(255, 255, 255, 0.04);
+        margin-top: 12px;
+      }
+      .meta {
+        display: flex;
+        justify-content: space-between;
+        color: #9ca3af;
+        font-size: 12px;
+        margin-bottom: 8px;
+      }
+      .handle {
+        color: #fbcfe8;
+      }
+      .content {
+        font-size: 14px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+      }
+      .hint {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #9ca3af;
+      }
+      code {
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 2px 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="top">
+        <div>
+          <div class="title">Mock Feed (for Veritas Extension)</div>
+          <div class="sub">
+            Open this page with the extension enabled. The content script will detect <code>&lt;article&gt;</code> posts
+            and inject a Veritas card under each.
+          </div>
+        </div>
+        <div class="sub">veritas / mvp</div>
+      </div>
+
+      <article>
+        <div class="meta">
+          <div class="handle">@suspicious_newbie</div>
+          <div>1m</div>
+        </div>
+        <div class="content">
+BREAKING: Scientists CONFIRM the vaccine contains microchips and the cure is a secret herb they don't want you to know
+about. Share now!
+        </div>
+        <div class="hint">Expected: low credibility + misinformation-style insight.</div>
+      </article>
+
+      <article>
+        <div class="meta">
+          <div class="handle">@verified_human</div>
+          <div>4m</div>
+        </div>
+        <div class="content">
+Update: Here are the primary sources for the report, plus a short summary of what’s confirmed vs. still unclear. Stay
+skeptical and check citations.
+        </div>
+        <div class="hint">Expected: higher credibility + “likely human-authored”.</div>
+      </article>
+
+      <article>
+        <div class="meta">
+          <div class="handle">@some_account</div>
+          <div>10m</div>
+        </div>
+        <div class="content">
+In conclusion, it is important to note that furthermore, overall, the results indicate a comprehensive overview of the
+situation with key takeaways presented below.
+        </div>
+        <div class="hint">Expected: medium credibility + higher AI-likelihood (heuristic).</div>
+      </article>
+    </div>
+  </body>
+</html>
+

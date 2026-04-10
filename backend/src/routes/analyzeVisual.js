@@ -4,12 +4,88 @@ const User = require("../models/User");
 const Post = require("../models/Post");
 const { analyzeVisual: analyzeVisualOpenAI, mockAnalyzeVisual } = require("../lib/openai");
 const { analyzeVisualVertex } = require("../lib/vertexVisual");
+const { analyzeVisualGeminiApi } = require("../lib/geminiApiVisual");
 const { calculateFinalScore, calculateBotScore, clamp } = require("../lib/scoring");
 const { getEnv } = require("../lib/env");
 const { isDbReady } = require("../lib/db");
 const { memoryStore } = require("../lib/memoryStore");
 
 const router = express.Router();
+
+/**
+ * Try backends in order until one succeeds:
+ * 1) GEMINI_API_KEY — Google AI Studio (simplest; no Vertex ADC)
+ * 2) Vertex (VERTEX_PROJECT / GOOGLE_CLOUD_PROJECT + ADC)
+ * 3) OpenAI (optional)
+ * 4) Mock if nothing configured
+ */
+async function runVisualBackends(env, text, images) {
+  const errors = [];
+  const geminiKey = env.GEMINI_API_KEY && String(env.GEMINI_API_KEY).trim();
+  if (geminiKey) {
+    try {
+      const a = await analyzeVisualGeminiApi({
+        apiKey: geminiKey,
+        model: env.GEMINI_MODEL,
+        text,
+        images,
+      });
+      return { analysis: a, provider: "gemini" };
+    } catch (e) {
+      errors.push(`Gemini API: ${String(e?.message || e)}`);
+    }
+  }
+
+  const vertexProject =
+    (env.VERTEX_PROJECT && String(env.VERTEX_PROJECT).trim()) ||
+    (process.env.GOOGLE_CLOUD_PROJECT && String(process.env.GOOGLE_CLOUD_PROJECT).trim()) ||
+    "";
+
+  if (vertexProject) {
+    try {
+      const a = await analyzeVisualVertex({
+        project: vertexProject,
+        location: env.VERTEX_LOCATION,
+        model: env.VERTEX_MODEL,
+        text,
+        images,
+      });
+      return { analysis: a, provider: "vertex" };
+    } catch (e) {
+      errors.push(`Vertex: ${String(e?.message || e)}`);
+    }
+  }
+
+  if (env.OPENAI_API_KEY && String(env.OPENAI_API_KEY).trim()) {
+    try {
+      const a = await analyzeVisualOpenAI({
+        apiKey: env.OPENAI_API_KEY,
+        model: env.OPENAI_MODEL,
+        text,
+        images,
+      });
+      return { analysis: a, provider: "openai" };
+    } catch (e) {
+      errors.push(`OpenAI: ${String(e?.response?.data?.error?.message || e?.message || e)}`);
+    }
+  }
+
+  if (!geminiKey && !vertexProject && !(env.OPENAI_API_KEY && String(env.OPENAI_API_KEY).trim())) {
+    return {
+      analysis: mockAnalyzeVisual(text, images.length),
+      provider: "mock",
+    };
+  }
+
+  const detail = errors.join(" | ");
+  const err = new Error(detail || "All vision backends failed");
+  err.statusCode = 502;
+  err.hint =
+    "Easiest fix: add GEMINI_API_KEY from https://aistudio.google.com/apikey to backend/.env and restart. " +
+    "Or fix Vertex ADC (gcloud auth application-default login) / billing / VERTEX_MODEL. " +
+    "Or set OPENAI_API_KEY.";
+  throw err;
+}
 
 router.post("/", async (req, res) => {
   const schema = z.object({
@@ -43,63 +119,19 @@ router.post("/", async (req, res) => {
   const baseTrust = user ? user.trustScore : 45;
   const botScore = user ? clamp(calculateBotScore(user), 0, 100) : 65;
 
-  const vertexProject =
-    (env.VERTEX_PROJECT && String(env.VERTEX_PROJECT).trim()) ||
-    (process.env.GOOGLE_CLOUD_PROJECT && String(process.env.GOOGLE_CLOUD_PROJECT).trim()) ||
-    "";
-
   let analysis;
   let analysisProvider = "unknown";
   try {
-    if (vertexProject) {
-      analysis = await analyzeVisualVertex({
-        project: vertexProject,
-        location: env.VERTEX_LOCATION,
-        model: env.VERTEX_MODEL,
-        text,
-        images,
-      });
-      analysisProvider = analysis.provider || "vertex";
-    } else if (env.OPENAI_API_KEY) {
-      analysis = await analyzeVisualOpenAI({
-        apiKey: env.OPENAI_API_KEY,
-        model: env.OPENAI_MODEL,
-        text,
-        images,
-      });
-      analysisProvider = "openai";
-    } else {
-      analysis = mockAnalyzeVisual(text, images.length);
-      analysisProvider = "mock";
-    }
+    const out = await runVisualBackends(env, text, images);
+    analysis = out.analysis;
+    analysisProvider = out.provider;
   } catch (e) {
-    const vertexErr = String(e?.message || e);
-    if (vertexProject && env.OPENAI_API_KEY) {
-      try {
-        analysis = await analyzeVisualOpenAI({
-          apiKey: env.OPENAI_API_KEY,
-          model: env.OPENAI_MODEL,
-          text,
-          images,
-        });
-        analysisProvider = "openai";
-      } catch (e2) {
-        const msg2 = String(e2?.response?.data?.error?.message || e2?.message || e2);
-        return res.status(502).json({
-          error: "Vision analysis failed",
-          detail: `Vertex: ${vertexErr}. OpenAI fallback: ${msg2}`,
-          hint: "Fix Vertex (ADC, billing, VERTEX_MODEL/region) or OpenAI key/model.",
-        });
-      }
-    } else {
-      return res.status(502).json({
-        error: "Vision analysis failed",
-        detail: vertexErr,
-        hint: vertexProject
-          ? "Check GOOGLE_APPLICATION_CREDENTIALS or `gcloud auth application-default login`, Vertex API enabled, and VERTEX_MODEL matches your region."
-          : "Set VERTEX_PROJECT or GOOGLE_CLOUD_PROJECT for Vertex Gemini, or set OPENAI_API_KEY for OpenAI.",
-      });
-    }
+    const msg = String(e?.message || e);
+    return res.status(e?.statusCode || 502).json({
+      error: "Vision analysis failed",
+      detail: msg,
+      hint: e?.hint || "See backend logs.",
+    });
   }
 
   const aiScore = clamp(Number(analysis.aiScore ?? 50), 0, 100);

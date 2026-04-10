@@ -126,7 +126,7 @@ function mockAnalyzeVisual(text, imageCount) {
   return {
     aiScore: 55,
     aiGeneratedProbability: 0.45,
-    explanation: `No Vertex project and no OPENAI_API_KEY: mock only. Configure Vertex (VERTEX_PROJECT + ADC) or OpenAI for real visual analysis. ${imageCount} frame(s). Caption: ${snippet || "(none)"}`,
+    explanation: `No GEMINI_API_KEY, no working Vertex/OpenAI: mock only. Add GEMINI_API_KEY (Google AI Studio) to .env for reel visuals. ${imageCount} frame(s). Caption: ${snippet || "(none)"}`,
   };
 }
 

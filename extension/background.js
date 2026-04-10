@@ -183,7 +183,10 @@ function analyzeReelVisualViaApi(payload) {
       }
       if (!resp.ok) {
         const detail = json.detail || json.error || txt;
-        throw new Error(typeof detail === "string" ? detail : JSON.stringify(json));
+        const hint = json.hint ? `\n${json.hint}` : "";
+        const msg =
+          typeof detail === "string" ? `${detail}${hint}` : `${JSON.stringify(json)}${hint}`;
+        throw new Error(msg);
       }
       return json;
     })

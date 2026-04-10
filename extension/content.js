@@ -256,6 +256,9 @@
         padding: 10px 12px;
         border-radius: 12px;
         font-size: 12px;
+        line-height: 1.4;
+        white-space: pre-wrap;
+        word-break: break-word;
         font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
         color: #fecaca;
         background: rgba(127, 29, 29, 0.85);
@@ -839,15 +842,17 @@
       note.style.opacity = "0.92";
       note.style.marginBottom = "8px";
       const via =
-        visualProvider === "vertex"
-          ? "Vertex AI (Gemini)"
-          : visualProvider === "openai"
-            ? "OpenAI"
-            : visualProvider === "mock"
-              ? "mock (no API)"
-              : visualProvider
-                ? escapeHtml(String(visualProvider))
-                : "";
+        visualProvider === "gemini"
+          ? "Gemini (Google AI)"
+          : visualProvider === "vertex"
+            ? "Vertex AI (Gemini)"
+            : visualProvider === "openai"
+              ? "OpenAI"
+              : visualProvider === "mock"
+                ? "mock (no API)"
+                : visualProvider
+                  ? escapeHtml(String(visualProvider))
+                  : "";
       note.innerHTML =
         "<b>Visual check:</b> From frame(s) of what’s on screen (Instagram blocks direct pixel read on their CDN, so we use a capture of the visible reel when needed). Plus caption/context. Not forensic proof." +
         (via ? ` <span style="opacity:0.85">· ${via}</span>` : "");
@@ -1011,7 +1016,7 @@
       btn.className = "veritas-reel-ai-btn";
       btn.textContent = "Veritas AI";
       btn.title =
-        "Analyze the playing reel visually (frames / screen capture) + caption for real vs AI-generated footage. Requires backend + OpenAI vision model.";
+        "Visual + caption via backend: Gemini API key (easiest), or Vertex ADC, or OpenAI. Backend :5000.";
       btn.addEventListener("click", async () => {
         const v = reelAiBoundVideo;
         if (!v || !v.isConnected) return;
@@ -1030,11 +1035,14 @@
           panel.appendChild(card);
           reelAiHostEl.appendChild(panel);
           reelAiPanelEl = panel;
-        } catch {
+        } catch (e) {
           const err = document.createElement("div");
           err.className = "veritas-reel-ai-error";
+          const detail = e && e.message ? String(e.message) : String(e);
           err.textContent =
-            "Veritas visual check failed. Run backend on :5000, enable Vertex (VERTEX_PROJECT / GOOGLE_CLOUD_PROJECT + GOOGLE_APPLICATION_CREDENTIALS or gcloud auth application-default login), check VERTEX_MODEL/region, reload the extension, keep the reel visible. OpenAI is optional fallback only if OPENAI_API_KEY is set.";
+            detail && detail.length > 0
+              ? `Veritas visual check failed:\n${detail}`
+              : "Veritas visual check failed (no details). Is the backend running on :5000? Add GEMINI_API_KEY to backend/.env (https://aistudio.google.com/apikey), restart the server, reload the extension.";
           reelAiHostEl.appendChild(err);
         } finally {
           btn.disabled = false;

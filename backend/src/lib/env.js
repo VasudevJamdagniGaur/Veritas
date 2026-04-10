@@ -3,11 +3,15 @@ const { z } = require("zod");
 const EnvSchema = z.object({
   PORT: z.coerce.number().default(5000),
   MONGODB_URI: z.string().min(1),
-  /** Google Cloud project for Vertex AI (reel visual analysis). Override in .env if different. */
-  VERTEX_PROJECT: z.string().optional().default("project-c212527d-22ac-4bbe-aaf"),
+  /** Set in .env to use Vertex for reels (with ADC). Leave empty to skip Vertex and use GEMINI_API_KEY instead. */
+  VERTEX_PROJECT: z.string().optional().default(""),
   VERTEX_LOCATION: z.string().optional().default("us-central1"),
-  /** e.g. gemini-1.5-flash, gemini-1.5-pro, gemini-2.0-flash-001 (region-dependent) */
+  /** e.g. gemini-1.5-flash, gemini-1.5-flash-002, gemini-2.0-flash-001 (region-dependent) */
   VERTEX_MODEL: z.string().optional().default("gemini-1.5-flash"),
+  /** Google AI Studio API key (https://aistudio.google.com/apikey) — used first for reel visuals; no Vertex setup. */
+  GEMINI_API_KEY: z.string().optional().default(""),
+  /** Developer API model id (e.g. gemini-1.5-flash, gemini-2.0-flash) */
+  GEMINI_MODEL: z.string().optional().default("gemini-1.5-flash"),
   OPENAI_API_KEY: z.string().optional().default(""),
   OPENAI_MODEL: z.string().optional().default("gpt-4o-mini"),
   JWT_SECRET: z.string().min(1).default("dev-secret-change-me"),

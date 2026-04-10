@@ -3,19 +3,14 @@ const { z } = require("zod");
 const EnvSchema = z.object({
   PORT: z.coerce.number().default(5000),
   MONGODB_URI: z.string().min(1),
-  /**
-   * GCP project id for Vertex AI. Optional if GOOGLE_APPLICATION_CREDENTIALS points to a
-   * service account JSON — project_id is read from that file automatically.
-   */
-  VERTEX_PROJECT: z.string().optional().default(""),
-  VERTEX_LOCATION: z.string().optional().default("us-central1"),
-  /** e.g. gemini-1.5-flash, gemini-1.5-flash-002, gemini-2.0-flash-001 (region-dependent) */
-  VERTEX_MODEL: z.string().optional().default("gemini-1.5-flash"),
-  /** Google AI Studio API key (https://aistudio.google.com/apikey) — used first for reel visuals; no Vertex setup. */
-  GEMINI_API_KEY: z.string().optional().default(""),
-  /** Developer API model id (e.g. gemini-1.5-flash, gemini-2.0-flash) */
-  GEMINI_MODEL: z.string().optional().default("gemini-1.5-flash"),
+  /** OpenAI API key for text + reel vision (keep in .env only; never commit). */
   OPENAI_API_KEY: z.string().optional().default(""),
+  /**
+   * Optional alias for the same key (e.g. if you copied from a CRA-style .env).
+   * Prefer OPENAI_API_KEY for this Node server.
+   */
+  REACT_APP_OPENAI_API_KEY: z.string().optional().default(""),
+  /** Use a vision-capable model for reel frames (e.g. gpt-4o-mini, gpt-4o). */
   OPENAI_MODEL: z.string().optional().default("gpt-4o-mini"),
   JWT_SECRET: z.string().min(1).default("dev-secret-change-me"),
   CHAIN_ENABLED: z
@@ -39,5 +34,12 @@ function getEnv() {
   return parsed.data;
 }
 
-module.exports = { getEnv };
+/** Resolved API key for OpenAI (OPENAI_API_KEY, or REACT_APP_OPENAI_API_KEY if the former is empty). */
+function resolveOpenAiApiKey(env) {
+  const a = env.OPENAI_API_KEY && String(env.OPENAI_API_KEY).trim();
+  if (a) return a;
+  const b = env.REACT_APP_OPENAI_API_KEY && String(env.REACT_APP_OPENAI_API_KEY).trim();
+  return b || "";
+}
 
+module.exports = { getEnv, resolveOpenAiApiKey };

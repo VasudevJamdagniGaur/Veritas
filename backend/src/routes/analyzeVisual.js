@@ -3,86 +3,41 @@ const { z } = require("zod");
 const User = require("../models/User");
 const Post = require("../models/Post");
 const { analyzeVisual: analyzeVisualOpenAI, mockAnalyzeVisual } = require("../lib/openai");
-const { analyzeVisualVertex } = require("../lib/vertexVisual");
-const { resolveVertexProjectId } = require("../lib/vertexProject");
-const { analyzeVisualGeminiApi } = require("../lib/geminiApiVisual");
 const { calculateFinalScore, calculateBotScore, clamp } = require("../lib/scoring");
-const { getEnv } = require("../lib/env");
+const { getEnv, resolveOpenAiApiKey } = require("../lib/env");
 const { isDbReady } = require("../lib/db");
 const { memoryStore } = require("../lib/memoryStore");
 
 const router = express.Router();
 
 /**
- * Try backends in order until one succeeds:
- * 1) Vertex (service account / VERTEX_PROJECT + ADC)
- * 2) GEMINI_API_KEY — Google AI Studio
- * 3) OpenAI (optional)
- * 4) Mock if nothing configured
+ * Reel / frame analysis via OpenAI vision only (key from .env).
+ * Mock if no key configured.
  */
 async function runVisualBackends(env, text, images) {
-  const errors = [];
-  const geminiKey = env.GEMINI_API_KEY && String(env.GEMINI_API_KEY).trim();
-
-  const vertexProject = resolveVertexProjectId(env);
-
-  if (vertexProject) {
-    try {
-      const a = await analyzeVisualVertex({
-        project: vertexProject,
-        location: env.VERTEX_LOCATION,
-        model: env.VERTEX_MODEL,
-        text,
-        images,
-      });
-      return { analysis: a, provider: "vertex" };
-    } catch (e) {
-      errors.push(`Vertex: ${String(e?.message || e)}`);
-    }
-  }
-
-  if (geminiKey) {
-    try {
-      const a = await analyzeVisualGeminiApi({
-        apiKey: geminiKey,
-        model: env.GEMINI_MODEL,
-        text,
-        images,
-      });
-      return { analysis: a, provider: "gemini" };
-    } catch (e) {
-      errors.push(`Gemini API: ${String(e?.message || e)}`);
-    }
-  }
-
-  if (env.OPENAI_API_KEY && String(env.OPENAI_API_KEY).trim()) {
+  const apiKey = resolveOpenAiApiKey(env);
+  if (apiKey) {
     try {
       const a = await analyzeVisualOpenAI({
-        apiKey: env.OPENAI_API_KEY,
+        apiKey,
         model: env.OPENAI_MODEL,
         text,
         images,
       });
       return { analysis: a, provider: "openai" };
     } catch (e) {
-      errors.push(`OpenAI: ${String(e?.response?.data?.error?.message || e?.message || e)}`);
+      const err = new Error(String(e?.response?.data?.error?.message || e?.message || e));
+      err.statusCode = 502;
+      err.hint =
+        "Check OPENAI_API_KEY or REACT_APP_OPENAI_API_KEY in backend/.env, billing, and OPENAI_MODEL (vision-capable, e.g. gpt-4o-mini).";
+      throw err;
     }
   }
 
-  if (!geminiKey && !vertexProject && !(env.OPENAI_API_KEY && String(env.OPENAI_API_KEY).trim())) {
-    return {
-      analysis: mockAnalyzeVisual(text, images.length),
-      provider: "mock",
-    };
-  }
-
-  const detail = errors.join(" | ");
-  const err = new Error(detail || "All vision backends failed");
-  err.statusCode = 502;
-  err.hint =
-    "Vertex: GOOGLE_APPLICATION_CREDENTIALS or VERTEX_SERVICE_ACCOUNT_KEY → service account JSON; VERTEX_PROJECT or project_id in JSON; enable Vertex AI API + Vertex AI User on the SA. " +
-    "Or GEMINI_API_KEY from https://aistudio.google.com/apikey. Or OPENAI_API_KEY.";
-  throw err;
+  return {
+    analysis: mockAnalyzeVisual(text, images.length),
+    provider: "mock",
+  };
 }
 
 router.post("/", async (req, res) => {

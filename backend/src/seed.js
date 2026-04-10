@@ -1,6 +1,6 @@
 require("dotenv").config();
 
-const { getEnv } = require("./lib/env");
+const { getEnv, resolveOpenAiApiKey } = require("./lib/env");
 const { connectDb } = require("./lib/db");
 const User = require("./models/User");
 const Post = require("./models/Post");
@@ -53,7 +53,7 @@ async function seed() {
   for (const p of demoPosts) {
     const user = await User.findById(p.userId);
     const analysis = await analyzeText({
-      apiKey: env.OPENAI_API_KEY,
+      apiKey: resolveOpenAiApiKey(env),
       model: env.OPENAI_MODEL,
       text: p.content,
     });

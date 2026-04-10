@@ -2,3 +2,5 @@ backend/*.json
 backend/*.json.*
 node_modules/
 .env
+**/.env
+backend/.env

@@ -4,7 +4,7 @@ const User = require("../models/User");
 const Post = require("../models/Post");
 const { analyzeText } = require("../lib/openai");
 const { calculateFinalScore, calculateBotScore, clamp } = require("../lib/scoring");
-const { getEnv } = require("../lib/env");
+const { getEnv, resolveOpenAiApiKey } = require("../lib/env");
 const { isDbReady } = require("../lib/db");
 const { memoryStore } = require("../lib/memoryStore");
 
@@ -39,7 +39,7 @@ router.post("/", async (req, res) => {
   const botScore = user ? clamp(calculateBotScore(user), 0, 100) : 65;
 
   const analysis = await analyzeText({
-    apiKey: env.OPENAI_API_KEY,
+    apiKey: resolveOpenAiApiKey(env),
     model: env.OPENAI_MODEL,
     text,
   });

@@ -897,17 +897,13 @@
       note.style.opacity = "0.92";
       note.style.marginBottom = "8px";
       const via =
-        visualProvider === "gemini"
-          ? "Gemini (Google AI)"
-          : visualProvider === "vertex"
-            ? "Vertex AI (Gemini)"
-            : visualProvider === "openai"
-              ? "OpenAI"
-              : visualProvider === "mock"
-                ? "mock (no API)"
-                : visualProvider
-                  ? escapeHtml(String(visualProvider))
-                  : "";
+        visualProvider === "openai"
+          ? "Veritas (OpenAI vision)"
+          : visualProvider === "mock"
+            ? "mock (no API key)"
+            : visualProvider
+              ? escapeHtml(String(visualProvider))
+              : "";
       note.innerHTML =
         "<b>Visual check:</b> From frame(s) of what’s on screen (Instagram blocks direct pixel read on their CDN, so we use a capture of the visible reel when needed). Plus caption/context. Not forensic proof." +
         (via ? ` <span style="opacity:0.85">· ${via}</span>` : "");
@@ -1097,7 +1093,7 @@
           const detail =
             raw && raw.length > 0
               ? formatExtensionMessagingError(raw)
-              : "Veritas visual check failed (no details). Is the backend on :5000? For Vertex: set GOOGLE_APPLICATION_CREDENTIALS (or VERTEX_SERVICE_ACCOUNT_KEY) to your service account JSON in backend/.env, restart, reload the extension. Or use GEMINI_API_KEY.";
+              : "Veritas visual check failed (no details). Is the backend on :5000? Set OPENAI_API_KEY (or REACT_APP_OPENAI_API_KEY) in backend/.env, restart the server, reload the extension.";
           const msg = document.createElement("div");
           msg.textContent =
             detail.length > 0 && !detail.startsWith("Veritas visual")

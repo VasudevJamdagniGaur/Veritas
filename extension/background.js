@@ -131,8 +131,104 @@ function analyzeTextViaApi(text, username, userId, source) {
     });
 }
 
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const chunk = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+/** Shrink huge tab screenshots before POST (OpenAI payload / memory). */
+async function downscaleDataUrlIfLarge(dataUrl, maxWidth = 960) {
+  try {
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    if (blob.size < 400000) return dataUrl;
+    const bmp = await createImageBitmap(blob);
+    const scale = Math.min(1, maxWidth / bmp.width);
+    const w = Math.round(bmp.width * scale);
+    const h = Math.round(bmp.height * scale);
+    const canvas = new OffscreenCanvas(w, h);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(bmp, 0, 0, w, h);
+    bmp.close();
+    const outBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.8 });
+    const ab = await outBlob.arrayBuffer();
+    return `data:image/jpeg;base64,${arrayBufferToBase64(ab)}`;
+  } catch {
+    return dataUrl;
+  }
+}
+
+function analyzeReelVisualViaApi(payload) {
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), 120000);
+  return fetch(`${VERITAS_API_BASE}/analyze-visual`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal: ctrl.signal,
+  })
+    .then(async (resp) => {
+      clearTimeout(tid);
+      const txt = await resp.text();
+      let json;
+      try {
+        json = JSON.parse(txt);
+      } catch {
+        throw new Error(`Analyze-visual failed: ${resp.status} ${txt.slice(0, 180)}`);
+      }
+      if (!resp.ok) {
+        const detail = json.detail || json.error || txt;
+        throw new Error(typeof detail === "string" ? detail : JSON.stringify(json));
+      }
+      return json;
+    })
+    .catch((e) => {
+      clearTimeout(tid);
+      throw e;
+    });
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   const t = msg?.type;
+
+  if (t === "VERITAS_ANALYZE_REEL") {
+    const windowId = _sender.tab?.windowId;
+    (async () => {
+      try {
+        let images = Array.isArray(msg.images)
+          ? msg.images.filter((u) => typeof u === "string" && u.startsWith("data:image"))
+          : [];
+        if (images.length === 0) {
+          const shot = await chrome.tabs.captureVisibleTab(
+            windowId == null ? undefined : windowId,
+            { format: "jpeg", quality: 72 }
+          );
+          if (!shot) throw new Error("Could not capture the tab (keep the reel visible and try again).");
+          images = [shot];
+        }
+        images = images.slice(0, 3);
+        images = await Promise.all(images.map((u) => downscaleDataUrlIfLarge(u)));
+
+        const text = typeof msg.text === "string" ? msg.text.slice(0, 4500) : "";
+        const data = await analyzeReelVisualViaApi({
+          text,
+          images,
+          username: msg.username != null ? String(msg.username) : "",
+          userId: msg.userId != null ? String(msg.userId) : "",
+          source: msg.source != null ? String(msg.source) : "extension",
+        });
+        sendResponse({ ok: true, data });
+      } catch (e) {
+        sendResponse({ ok: false, error: String(e?.message || e) });
+      }
+    })();
+    return true;
+  }
 
   if (t === "VERITAS_ANALYZE" && typeof msg.text === "string" && msg.text.length > 0) {
     analyzeTextViaApi(msg.text, msg.username, msg.userId, msg.source)

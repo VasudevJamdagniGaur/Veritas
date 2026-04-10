@@ -764,13 +764,84 @@
     return resp.json();
   }
 
-  function renderCard({ finalScore, aiGeneratedProbability, explanation }) {
+  /**
+   * Reel / video: vision model over frame(s). Instagram video is cross-origin → canvas is tainted;
+   * background falls back to captureVisibleTab when images[] is empty.
+   */
+  async function analyzeReelVisual(text, images) {
+    if (typeof chrome === "undefined" || !chrome.runtime?.id) {
+      throw new Error("Extension required for reel visual analysis");
+    }
+    const bg = await new Promise((resolve, reject) => {
+      try {
+        chrome.runtime.sendMessage(
+          {
+            type: "VERITAS_ANALYZE_REEL",
+            text,
+            images: Array.isArray(images) ? images : [],
+            source: "extension",
+          },
+          (response) => {
+            const err = chrome.runtime.lastError;
+            if (err) {
+              reject(new Error(err.message));
+              return;
+            }
+            resolve(response);
+          }
+        );
+      } catch (e) {
+        reject(e);
+      }
+    });
+    if (bg && bg.ok === true && bg.data) return bg.data;
+    throw new Error(bg?.error || "Reel visual analyze failed");
+  }
+
+  /** @returns {string | null} data URL or null if cross-origin / not ready */
+  function tryCaptureVideoFrameDataUrl(video) {
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (!vw || !vh) return null;
+    const canvas = document.createElement("canvas");
+    const maxSide = 768;
+    let cw = vw;
+    let ch = vh;
+    if (Math.max(vw, vh) > maxSide) {
+      const s = maxSide / Math.max(vw, vh);
+      cw = Math.round(vw * s);
+      ch = Math.round(vh * s);
+    }
+    canvas.width = cw;
+    canvas.height = ch;
+    const ctx = canvas.getContext("2d");
+    try {
+      ctx.drawImage(video, 0, 0, cw, ch);
+      return canvas.toDataURL("image/jpeg", 0.82);
+    } catch {
+      return null;
+    }
+  }
+
+  function renderCard({ finalScore, aiGeneratedProbability, explanation, analysisSource }) {
     const score = clamp(Math.round(finalScore), 0, 100);
     const aiProbPct = clamp(Math.round(Number(aiGeneratedProbability) * 100), 0, 100);
     const t = tone(score);
+    const isVisual = analysisSource === "visual";
 
     const card = document.createElement("div");
     card.className = "veritas-card";
+
+    if (isVisual) {
+      const note = document.createElement("div");
+      note.className = "veritas-insight";
+      note.style.fontSize = "11px";
+      note.style.opacity = "0.92";
+      note.style.marginBottom = "8px";
+      note.innerHTML =
+        "<b>Visual check:</b> From frame(s) of what’s on screen (Instagram blocks direct pixel read on their CDN, so we use a capture of the visible reel when needed). Plus caption/context. Not forensic proof.";
+      card.appendChild(note);
+    }
 
     const row = document.createElement("div");
     row.className = "veritas-row";
@@ -802,8 +873,11 @@
 
     const aiFlag = document.createElement("div");
     aiFlag.className = "veritas-insight";
-    aiFlag.innerHTML =
-      aiProbPct >= 60
+    aiFlag.innerHTML = isVisual
+      ? aiProbPct >= 60
+        ? `<span class="veritas-warn">⚠ On-screen visuals lean synthetic / AI-generated</span>`
+        : `<span class="veritas-ok">On-screen visuals look more like real footage</span>`
+      : aiProbPct >= 60
         ? `<span class="veritas-warn">⚠ Possibly AI-generated</span>`
         : `<span class="veritas-ok">Likely human-authored</span>`;
 
@@ -925,7 +999,8 @@
       btn.type = "button";
       btn.className = "veritas-reel-ai-btn";
       btn.textContent = "Veritas AI";
-      btn.title = "Check caption/context for likely AI-generated or synthetic video (Veritas API)";
+      btn.title =
+        "Analyze the playing reel visually (frames / screen capture) + caption for real vs AI-generated footage. Requires backend + OpenAI vision model.";
       btn.addEventListener("click", async () => {
         const v = reelAiBoundVideo;
         if (!v || !v.isConnected) return;
@@ -935,7 +1010,9 @@
         btn.textContent = "…";
         try {
           const text = buildReelAnalyzeText(v);
-          const result = await analyze(text);
+          const frame = tryCaptureVideoFrameDataUrl(v);
+          const images = frame ? [frame] : [];
+          const result = await analyzeReelVisual(text, images);
           const card = renderCard(result);
           const panel = document.createElement("div");
           panel.className = "veritas-reel-ai-panel";
@@ -946,7 +1023,7 @@
           const err = document.createElement("div");
           err.className = "veritas-reel-ai-error";
           err.textContent =
-            "Veritas AI unreachable. Start the API (e.g. backend on :5000) or check extension config.";
+            "Veritas visual check failed. Run the backend on :5000, set OPENAI_API_KEY, use a vision model (e.g. gpt-4o-mini), reload the extension (tabs permission), and keep the reel visible in the tab.";
           reelAiHostEl.appendChild(err);
         } finally {
           btn.disabled = false;

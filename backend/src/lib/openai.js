@@ -121,5 +121,101 @@ async function analyzeText({ apiKey, model, text }) {
   }
 }
 
-module.exports = { analyzeText };
+function mockAnalyzeVisual(text, imageCount) {
+  const snippet = String(text || "").slice(0, 160);
+  return {
+    aiScore: 55,
+    aiGeneratedProbability: 0.45,
+    explanation: `No OPENAI_API_KEY (or offline): mock only. With a vision model (e.g. gpt-4o-mini), Veritas would judge ${imageCount} frame(s) for synthetic humans / AI-video cues. Caption snippet: ${snippet || "(none)"}`,
+  };
+}
+
+/**
+ * Vision path: still frames from the reel + optional caption (Chat Completions multimodal).
+ * Requires a vision-capable OPENAI_MODEL (e.g. gpt-4o-mini, gpt-4o).
+ */
+async function openAiAnalyzeVisual({ apiKey, model, text, imageDataUrls }) {
+  const caption = String(text || "").trim();
+  const prompt = [
+    "You are Veritas, a trust layer for social media.",
+    "You receive still frame(s) from a short vertical video (Reel-style).",
+    "Judge whether the visuals look like REAL camera footage of humans and real environments versus AI-generated or synthetic video (deepfakes, full-AI humans, uncanny CGI, obvious GAN/diffusion artifacts).",
+    "Still frames are weak evidence—be calibrated; say when uncertain.",
+    "Return STRICT JSON ONLY with keys:",
+    "aiScore (0-100, higher = more credible / likely authentic human footage),",
+    "aiGeneratedProbability (0-1, higher = more likely synthetic or AI-generated visuals),",
+    "explanation (2-4 sentences: cite visible cues like skin/eyes/hands, lighting consistency, motion blur, warping, text/UI in frame).",
+    caption ? `\nOPTIONAL CAPTION / ON-PAGE TEXT:\n${caption}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const userContent = [
+    { type: "text", text: prompt },
+    ...imageDataUrls.map((url) => ({
+      type: "image_url",
+      image_url: { url, detail: "low" },
+    })),
+  ];
+
+  const resp = await axios.post(
+    "https://api.openai.com/v1/chat/completions",
+    {
+      model,
+      messages: [
+        { role: "system", content: "Return strict JSON only." },
+        { role: "user", content: userContent },
+      ],
+      temperature: 0.2,
+      max_tokens: 600,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      timeout: 120000,
+    }
+  );
+
+  const content = resp.data?.choices?.[0]?.message?.content ?? "";
+  const firstBrace = content.indexOf("{");
+  const lastBrace = content.lastIndexOf("}");
+  if (firstBrace === -1 || lastBrace === -1) {
+    throw new Error("OpenAI returned non-JSON content for vision request");
+  }
+  return JSON.parse(content.slice(firstBrace, lastBrace + 1));
+}
+
+/**
+ * @param {{ apiKey: string, model: string, text?: string, images: string[] }} opts
+ * images = data URLs (data:image/jpeg;base64,...)
+ */
+async function analyzeVisual({ apiKey, model, text, images }) {
+  const imageDataUrls = Array.isArray(images) ? images : [];
+  if (imageDataUrls.length === 0) {
+    throw new Error("analyzeVisual requires at least one image");
+  }
+  if (!apiKey) return mockAnalyzeVisual(text, imageDataUrls.length);
+
+  const res = await openAiAnalyzeVisual({
+    apiKey,
+    model,
+    text: text || "",
+    imageDataUrls,
+  });
+  const aiScore = Number(res.aiScore);
+  const aiGeneratedProbability = Number(res.aiGeneratedProbability);
+  const explanation = String(res.explanation || "");
+  if (
+    Number.isFinite(aiScore) &&
+    Number.isFinite(aiGeneratedProbability) &&
+    explanation
+  ) {
+    return { aiScore, aiGeneratedProbability, explanation };
+  }
+  throw new Error("Vision model returned an invalid JSON shape");
+}
+
+module.exports = { analyzeText, analyzeVisual, mockAnalyzeVisual };
 

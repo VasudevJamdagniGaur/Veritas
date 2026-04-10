@@ -32,9 +32,16 @@ async function analyzeVisualVertex({ project, location, model, text, images }) {
     });
   }
 
-  const result = await generativeModel.generateContent({
-    contents: [{ role: "user", parts }],
-  });
+  let result;
+  try {
+    result = await generativeModel.generateContent({
+      contents: [{ role: "user", parts }],
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("VERTEX ERROR:", err);
+    throw err;
+  }
 
   const candidate = result?.response?.candidates?.[0];
   if (!candidate?.content?.parts?.length) {

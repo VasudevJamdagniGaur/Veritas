@@ -3,7 +3,10 @@ const { z } = require("zod");
 const EnvSchema = z.object({
   PORT: z.coerce.number().default(5000),
   MONGODB_URI: z.string().min(1),
-  /** Set in .env to use Vertex for reels (with ADC). Leave empty to skip Vertex and use GEMINI_API_KEY instead. */
+  /**
+   * GCP project id for Vertex AI. Optional if GOOGLE_APPLICATION_CREDENTIALS points to a
+   * service account JSON — project_id is read from that file automatically.
+   */
   VERTEX_PROJECT: z.string().optional().default(""),
   VERTEX_LOCATION: z.string().optional().default("us-central1"),
   /** e.g. gemini-1.5-flash, gemini-1.5-flash-002, gemini-2.0-flash-001 (region-dependent) */

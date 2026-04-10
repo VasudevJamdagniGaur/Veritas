@@ -4,6 +4,7 @@ const User = require("../models/User");
 const Post = require("../models/Post");
 const { analyzeVisual: analyzeVisualOpenAI, mockAnalyzeVisual } = require("../lib/openai");
 const { analyzeVisualVertex } = require("../lib/vertexVisual");
+const { resolveVertexProjectId } = require("../lib/vertexProject");
 const { analyzeVisualGeminiApi } = require("../lib/geminiApiVisual");
 const { calculateFinalScore, calculateBotScore, clamp } = require("../lib/scoring");
 const { getEnv } = require("../lib/env");
@@ -36,10 +37,7 @@ async function runVisualBackends(env, text, images) {
     }
   }
 
-  const vertexProject =
-    (env.VERTEX_PROJECT && String(env.VERTEX_PROJECT).trim()) ||
-    (process.env.GOOGLE_CLOUD_PROJECT && String(process.env.GOOGLE_CLOUD_PROJECT).trim()) ||
-    "";
+  const vertexProject = resolveVertexProjectId(env);
 
   if (vertexProject) {
     try {
@@ -82,7 +80,8 @@ async function runVisualBackends(env, text, images) {
   err.statusCode = 502;
   err.hint =
     "Easiest fix: add GEMINI_API_KEY from https://aistudio.google.com/apikey to backend/.env and restart. " +
-    "Or fix Vertex ADC (gcloud auth application-default login) / billing / VERTEX_MODEL. " +
+    "For Vertex: set GOOGLE_APPLICATION_CREDENTIALS to your service account JSON path (project_id is read automatically), " +
+    "or set VERTEX_PROJECT, enable Vertex AI API + billing, and grant the SA Vertex AI User. " +
     "Or set OPENAI_API_KEY.";
   throw err;
 }

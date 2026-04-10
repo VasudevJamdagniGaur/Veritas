@@ -5,12 +5,22 @@ const cors = require("cors");
 const morgan = require("morgan");
 
 const { getEnv } = require("./lib/env");
+const { resolveVertexProjectId } = require("./lib/vertexProject");
 const { connectDb, isDbReady } = require("./lib/db");
 const apiRoutes = require("./routes");
 const analyzeVisualRoutes = require("./routes/analyzeVisual");
 
 async function main() {
   const env = getEnv();
+  const vertexProjectId = resolveVertexProjectId(env);
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim()) {
+    // eslint-disable-next-line no-console
+    console.log(
+      vertexProjectId
+        ? `[Veritas] Vertex AI: using project "${vertexProjectId}" (from env and/or service account JSON)`
+        : "[Veritas] Vertex AI: GOOGLE_APPLICATION_CREDENTIALS is set but project id could not be resolved — check file path and JSON `project_id`"
+    );
+  }
   connectDb(env.MONGODB_URI).catch((e) => {
     // eslint-disable-next-line no-console
     console.warn("MongoDB not available. Running in in-memory fallback mode.");

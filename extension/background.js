@@ -99,16 +99,55 @@ async function scoreSocialHandle(handle) {
 
 chrome.runtime.onInstalled.addListener(() => {});
 
+/**
+ * POST /api/analyze from the service worker so https sites (Instagram, X, …)
+ * can reach http://localhost without mixed-content blocking the content script.
+ */
+function analyzeTextViaApi(text, username, userId, source) {
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), 25000);
+  return fetch(`${VERITAS_API_BASE}/analyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text: String(text),
+      username: username != null ? String(username) : "",
+      userId: userId != null ? String(userId) : "",
+      source: source != null ? String(source) : "extension",
+    }),
+    signal: ctrl.signal,
+  })
+    .then(async (resp) => {
+      clearTimeout(tid);
+      if (!resp.ok) {
+        const errBody = await resp.text().catch(() => "");
+        throw new Error(`Analyze failed: ${resp.status}${errBody ? ` ${errBody.slice(0, 200)}` : ""}`);
+      }
+      return resp.json();
+    })
+    .catch((e) => {
+      clearTimeout(tid);
+      throw e;
+    });
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   const t = msg?.type;
-  if ((t !== "VERITAS_SOCIAL_SCORE" && t !== "VERITAS_INSTAGRAM_SCORE") || !msg.handle) {
-    return false;
+
+  if (t === "VERITAS_ANALYZE" && typeof msg.text === "string" && msg.text.length > 0) {
+    analyzeTextViaApi(msg.text, msg.username, msg.userId, msg.source)
+      .then((data) => sendResponse({ ok: true, data }))
+      .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+    return true;
   }
 
-  const handle = String(msg.handle).replace(/^@/, "");
-  scoreSocialHandle(handle)
-    .then((data) => sendResponse({ ok: true, ...data }))
-    .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+  if ((t === "VERITAS_SOCIAL_SCORE" || t === "VERITAS_INSTAGRAM_SCORE") && msg.handle) {
+    const handle = String(msg.handle).replace(/^@/, "");
+    scoreSocialHandle(handle)
+      .then((data) => sendResponse({ ok: true, ...data }))
+      .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+    return true;
+  }
 
-  return true;
+  return false;
 });

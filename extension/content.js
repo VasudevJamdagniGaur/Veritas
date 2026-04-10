@@ -732,6 +732,29 @@
       source: "extension",
     };
 
+    // https:// pages cannot fetch http://localhost (mixed content). Service worker can.
+    if (typeof chrome !== "undefined" && chrome.runtime?.id) {
+      const bg = await new Promise((resolve, reject) => {
+        try {
+          chrome.runtime.sendMessage(
+            { type: "VERITAS_ANALYZE", ...body },
+            (response) => {
+              const err = chrome.runtime.lastError;
+              if (err) {
+                reject(new Error(err.message));
+                return;
+              }
+              resolve(response);
+            }
+          );
+        } catch (e) {
+          reject(e);
+        }
+      });
+      if (bg && bg.ok === true && bg.data) return bg.data;
+      throw new Error(bg?.error || "Analyze failed");
+    }
+
     const resp = await fetch(`${API_BASE}/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

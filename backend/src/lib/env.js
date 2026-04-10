@@ -3,6 +3,11 @@ const { z } = require("zod");
 const EnvSchema = z.object({
   PORT: z.coerce.number().default(5000),
   MONGODB_URI: z.string().min(1),
+  /** Google Cloud project for Vertex AI (reel visual analysis). Override in .env if different. */
+  VERTEX_PROJECT: z.string().optional().default("project-c212527d-22ac-4bbe-aaf"),
+  VERTEX_LOCATION: z.string().optional().default("us-central1"),
+  /** e.g. gemini-1.5-flash, gemini-1.5-pro, gemini-2.0-flash-001 (region-dependent) */
+  VERTEX_MODEL: z.string().optional().default("gemini-1.5-flash"),
   OPENAI_API_KEY: z.string().optional().default(""),
   OPENAI_MODEL: z.string().optional().default("gpt-4o-mini"),
   JWT_SECRET: z.string().min(1).default("dev-secret-change-me"),

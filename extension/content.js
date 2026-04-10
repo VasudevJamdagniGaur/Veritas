@@ -823,7 +823,7 @@
     }
   }
 
-  function renderCard({ finalScore, aiGeneratedProbability, explanation, analysisSource }) {
+  function renderCard({ finalScore, aiGeneratedProbability, explanation, analysisSource, visualProvider }) {
     const score = clamp(Math.round(finalScore), 0, 100);
     const aiProbPct = clamp(Math.round(Number(aiGeneratedProbability) * 100), 0, 100);
     const t = tone(score);
@@ -838,8 +838,19 @@
       note.style.fontSize = "11px";
       note.style.opacity = "0.92";
       note.style.marginBottom = "8px";
+      const via =
+        visualProvider === "vertex"
+          ? "Vertex AI (Gemini)"
+          : visualProvider === "openai"
+            ? "OpenAI"
+            : visualProvider === "mock"
+              ? "mock (no API)"
+              : visualProvider
+                ? escapeHtml(String(visualProvider))
+                : "";
       note.innerHTML =
-        "<b>Visual check:</b> From frame(s) of what’s on screen (Instagram blocks direct pixel read on their CDN, so we use a capture of the visible reel when needed). Plus caption/context. Not forensic proof.";
+        "<b>Visual check:</b> From frame(s) of what’s on screen (Instagram blocks direct pixel read on their CDN, so we use a capture of the visible reel when needed). Plus caption/context. Not forensic proof." +
+        (via ? ` <span style="opacity:0.85">· ${via}</span>` : "");
       card.appendChild(note);
     }
 
@@ -1023,7 +1034,7 @@
           const err = document.createElement("div");
           err.className = "veritas-reel-ai-error";
           err.textContent =
-            "Veritas visual check failed. Run the backend on :5000, set OPENAI_API_KEY, use a vision model (e.g. gpt-4o-mini), reload the extension (tabs permission), and keep the reel visible in the tab.";
+            "Veritas visual check failed. Run backend on :5000, enable Vertex (VERTEX_PROJECT / GOOGLE_CLOUD_PROJECT + GOOGLE_APPLICATION_CREDENTIALS or gcloud auth application-default login), check VERTEX_MODEL/region, reload the extension, keep the reel visible. OpenAI is optional fallback only if OPENAI_API_KEY is set.";
           reelAiHostEl.appendChild(err);
         } finally {
           btn.disabled = false;

@@ -1,12 +1,16 @@
+/**
+ * Standalone ESM example. The Express API uses CommonJS: `src/lib/vertexVisual.js`
+ * with env VERTEX_PROJECT, VERTEX_LOCATION, VERTEX_MODEL (see `src/lib/env.js`).
+ */
 import { VertexAI } from "@google-cloud/vertexai";
 
 const vertexAI = new VertexAI({
-  project: "project-c212527d-22ac-4bbe-aaf",
-  location: "us-central1",
+  project: process.env.VERTEX_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || "project-c212527d-22ac-4bbe-aaf",
+  location: process.env.VERTEX_LOCATION || "us-central1",
 });
 
 const model = vertexAI.getGenerativeModel({
-  model: "gemini-1.5-flash",
+  model: process.env.VERTEX_MODEL || "gemini-1.5-flash",
 });
 
 export async function analyzeText(text) {

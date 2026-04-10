@@ -2,7 +2,8 @@ const express = require("express");
 const { z } = require("zod");
 const User = require("../models/User");
 const Post = require("../models/Post");
-const { analyzeVisual } = require("../lib/openai");
+const { analyzeVisual: analyzeVisualOpenAI, mockAnalyzeVisual } = require("../lib/openai");
+const { analyzeVisualVertex } = require("../lib/vertexVisual");
 const { calculateFinalScore, calculateBotScore, clamp } = require("../lib/scoring");
 const { getEnv } = require("../lib/env");
 const { isDbReady } = require("../lib/db");
@@ -42,21 +43,63 @@ router.post("/", async (req, res) => {
   const baseTrust = user ? user.trustScore : 45;
   const botScore = user ? clamp(calculateBotScore(user), 0, 100) : 65;
 
+  const vertexProject =
+    (env.VERTEX_PROJECT && String(env.VERTEX_PROJECT).trim()) ||
+    (process.env.GOOGLE_CLOUD_PROJECT && String(process.env.GOOGLE_CLOUD_PROJECT).trim()) ||
+    "";
+
   let analysis;
+  let analysisProvider = "unknown";
   try {
-    analysis = await analyzeVisual({
-      apiKey: env.OPENAI_API_KEY,
-      model: env.OPENAI_MODEL,
-      text,
-      images,
-    });
+    if (vertexProject) {
+      analysis = await analyzeVisualVertex({
+        project: vertexProject,
+        location: env.VERTEX_LOCATION,
+        model: env.VERTEX_MODEL,
+        text,
+        images,
+      });
+      analysisProvider = analysis.provider || "vertex";
+    } else if (env.OPENAI_API_KEY) {
+      analysis = await analyzeVisualOpenAI({
+        apiKey: env.OPENAI_API_KEY,
+        model: env.OPENAI_MODEL,
+        text,
+        images,
+      });
+      analysisProvider = "openai";
+    } else {
+      analysis = mockAnalyzeVisual(text, images.length);
+      analysisProvider = "mock";
+    }
   } catch (e) {
-    const msg = String(e?.response?.data?.error?.message || e?.message || e);
-    return res.status(502).json({
-      error: "Vision analysis failed",
-      detail: msg,
-      hint: "Use a vision-capable model in OPENAI_MODEL (e.g. gpt-4o-mini or gpt-4o).",
-    });
+    const vertexErr = String(e?.message || e);
+    if (vertexProject && env.OPENAI_API_KEY) {
+      try {
+        analysis = await analyzeVisualOpenAI({
+          apiKey: env.OPENAI_API_KEY,
+          model: env.OPENAI_MODEL,
+          text,
+          images,
+        });
+        analysisProvider = "openai";
+      } catch (e2) {
+        const msg2 = String(e2?.response?.data?.error?.message || e2?.message || e2);
+        return res.status(502).json({
+          error: "Vision analysis failed",
+          detail: `Vertex: ${vertexErr}. OpenAI fallback: ${msg2}`,
+          hint: "Fix Vertex (ADC, billing, VERTEX_MODEL/region) or OpenAI key/model.",
+        });
+      }
+    } else {
+      return res.status(502).json({
+        error: "Vision analysis failed",
+        detail: vertexErr,
+        hint: vertexProject
+          ? "Check GOOGLE_APPLICATION_CREDENTIALS or `gcloud auth application-default login`, Vertex API enabled, and VERTEX_MODEL matches your region."
+          : "Set VERTEX_PROJECT or GOOGLE_CLOUD_PROJECT for Vertex Gemini, or set OPENAI_API_KEY for OpenAI.",
+      });
+    }
   }
 
   const aiScore = clamp(Number(analysis.aiScore ?? 50), 0, 100);
@@ -102,6 +145,7 @@ router.post("/", async (req, res) => {
     finalScore,
     postId: post._id,
     analysisSource: "visual",
+    visualProvider: analysisProvider,
   });
 });
 

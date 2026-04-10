@@ -126,7 +126,7 @@ function mockAnalyzeVisual(text, imageCount) {
   return {
     aiScore: 55,
     aiGeneratedProbability: 0.45,
-    explanation: `No OPENAI_API_KEY (or offline): mock only. With a vision model (e.g. gpt-4o-mini), Veritas would judge ${imageCount} frame(s) for synthetic humans / AI-video cues. Caption snippet: ${snippet || "(none)"}`,
+    explanation: `No Vertex project and no OPENAI_API_KEY: mock only. Configure Vertex (VERTEX_PROJECT + ADC) or OpenAI for real visual analysis. ${imageCount} frame(s). Caption: ${snippet || "(none)"}`,
   };
 }
 

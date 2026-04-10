@@ -13,7 +13,7 @@ async function main() {
   if (!openaiKey) {
     // eslint-disable-next-line no-console
     console.warn(
-      "[Veritas] OPENAI_API_KEY (or REACT_APP_OPENAI_API_KEY) is not set — reel visuals will use mock until you add the key to backend/.env and restart."
+      "[Veritas] REACT_APP_OPENAI_API_KEY or OPENAI_API_KEY not set — reel visuals use mock until backend/.env has a key and you restart."
     );
   } else {
     // eslint-disable-next-line no-console
@@ -34,12 +34,14 @@ async function main() {
 
   app.get("/", (_req, res) => res.json({ ok: true, name: "Veritas API" }));
   app.get("/api/health", (_req, res) => {
+    const fresh = getEnv();
+    const keyOk = Boolean(resolveOpenAiApiKey(fresh));
     res.json({
       ok: true,
       dbReady: isDbReady(),
       reelVision: {
-        willUseMock: !resolveOpenAiApiKey(env),
-        openAiConfigured: Boolean(resolveOpenAiApiKey(env)),
+        willUseMock: !keyOk,
+        openAiConfigured: keyOk,
       },
     });
   });

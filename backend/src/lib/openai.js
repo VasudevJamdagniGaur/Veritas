@@ -126,7 +126,7 @@ function mockAnalyzeVisual(text, imageCount) {
   return {
     aiScore: 55,
     aiGeneratedProbability: 0.45,
-    explanation: `No OPENAI_API_KEY (or REACT_APP_OPENAI_API_KEY) in backend/.env — mock only. Add your key, restart the server, use a vision model (e.g. gpt-4o-mini). ${imageCount} frame(s). Caption: ${snippet || "(none)"}`,
+    explanation: `No REACT_APP_OPENAI_API_KEY or OPENAI_API_KEY in backend/.env — mock only. Add your key, restart the backend, use a vision model (e.g. gpt-4o-mini). ${imageCount} frame(s). Caption: ${snippet || "(none)"}`,
   };
 }
 

@@ -6,7 +6,7 @@ if (!fs.existsSync(envPath)) {
   // eslint-disable-next-line no-console
   console.warn(`[Veritas] Missing ${envPath} — copy backend/.env.example and add secrets.`);
 }
-require("dotenv").config({ path: envPath });
+require("dotenv").config({ path: envPath, override: true });
 
 require("./src/index");
 

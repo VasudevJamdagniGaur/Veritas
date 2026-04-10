@@ -54,6 +54,29 @@
     return m;
   }
 
+  /**
+   * Single path for background `sendMessage` (used by text analyze + reel vision).
+   * @returns {Promise<object|null>} response object, or `null` if no extension runtime (caller may fall back to fetch).
+   */
+  function sendMessageToExtension(message) {
+    const rt = extensionRuntime();
+    if (!rt) return Promise.resolve(null);
+    return new Promise((resolve, reject) => {
+      try {
+        rt.sendMessage(message, (response) => {
+          const err = getLastRuntimeError();
+          if (err) {
+            reject(new Error(formatExtensionMessagingError(err)));
+            return;
+          }
+          resolve(response);
+        });
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
   /** Single floating host for “check AI” on Instagram Reels (syncs to the primary visible video). */
   let reelAiHostEl = null;
   let reelAiBoundVideo = null;
@@ -511,36 +534,17 @@
   async function fetchAccountScore(scoreKey) {
     if (accountScoreCache.has(scoreKey)) return accountScoreCache.get(scoreKey);
     const p = (async () => {
-      const extRt = extensionRuntime();
-      if (extRt) {
-        try {
-          const bg = await new Promise((resolve, reject) => {
-            try {
-              extRt.sendMessage(
-                { type: "VERITAS_SOCIAL_SCORE", handle: scoreKey },
-                (response) => {
-                  const err = getLastRuntimeError();
-                  if (err) {
-                    reject(new Error(formatExtensionMessagingError(err)));
-                    return;
-                  }
-                  resolve(response);
-                }
-              );
-            } catch (e) {
-              reject(e);
-            }
-          });
-          if (bg && bg.ok === true && typeof bg.score === "number") {
-            return {
-              realnessScore: bg.score,
-              source: bg.source || "extension-bg",
-              bot_probability: typeof bg.bot_probability === "number" ? bg.bot_probability : undefined,
-            };
-          }
-        } catch {
-          // fall through to direct fetch / mock
+      try {
+        const bg = await sendMessageToExtension({ type: "VERITAS_SOCIAL_SCORE", handle: scoreKey });
+        if (bg && bg.ok === true && typeof bg.score === "number") {
+          return {
+            realnessScore: bg.score,
+            source: bg.source || "extension-bg",
+            bot_probability: typeof bg.bot_probability === "number" ? bg.bot_probability : undefined,
+          };
         }
+      } catch {
+        // fall through to direct fetch / mock
       }
 
       try {
@@ -787,26 +791,9 @@
     };
 
     // https:// pages cannot fetch http://localhost (mixed content). Service worker can.
-    const extRtAnalyze = extensionRuntime();
-    if (extRtAnalyze) {
-      const bg = await new Promise((resolve, reject) => {
-        try {
-          extRtAnalyze.sendMessage(
-            { type: "VERITAS_ANALYZE", ...body },
-            (response) => {
-              const err = getLastRuntimeError();
-              if (err) {
-                reject(new Error(formatExtensionMessagingError(err)));
-                return;
-              }
-              resolve(response);
-            }
-          );
-        } catch (e) {
-          reject(e);
-        }
-      });
-      if (bg && bg.ok === true && bg.data) return bg.data;
+    const bg = await sendMessageToExtension({ type: "VERITAS_ANALYZE", ...body });
+    if (bg) {
+      if (bg.ok === true && bg.data) return bg.data;
       throw new Error(formatExtensionMessagingError(bg?.error || "Analyze failed"));
     }
 
@@ -824,35 +811,18 @@
    * background falls back to captureVisibleTab when images[] is empty.
    */
   async function analyzeReelVisual(text, images) {
-    const extRtReel = extensionRuntime();
-    if (!extRtReel) {
+    const bg = await sendMessageToExtension({
+      type: "VERITAS_ANALYZE_REEL",
+      text,
+      images: Array.isArray(images) ? images : [],
+      source: "extension",
+    });
+    if (!bg) {
       throw new Error(
         "Extension messaging unavailable here. Reload the page, update the Veritas extension, or use instagram.com in Chrome/Edge with the extension enabled (not an in-app browser)."
       );
     }
-    const bg = await new Promise((resolve, reject) => {
-      try {
-        extRtReel.sendMessage(
-          {
-            type: "VERITAS_ANALYZE_REEL",
-            text,
-            images: Array.isArray(images) ? images : [],
-            source: "extension",
-          },
-          (response) => {
-            const err = getLastRuntimeError();
-            if (err) {
-              reject(new Error(formatExtensionMessagingError(err)));
-              return;
-            }
-            resolve(response);
-          }
-        );
-      } catch (e) {
-        reject(e);
-      }
-    });
-    if (bg && bg.ok === true && bg.data) return bg.data;
+    if (bg.ok === true && bg.data) return bg.data;
     throw new Error(formatExtensionMessagingError(bg?.error || "Reel visual analyze failed"));
   }
 
@@ -1093,7 +1063,7 @@
           const detail =
             raw && raw.length > 0
               ? formatExtensionMessagingError(raw)
-              : "Veritas visual check failed (no details). Is the backend on :5000? Set OPENAI_API_KEY (or REACT_APP_OPENAI_API_KEY) in backend/.env, restart the server, reload the extension.";
+              : "Veritas visual check failed (no details). Is the backend on :5000? Set REACT_APP_OPENAI_API_KEY (or OPENAI_API_KEY) in backend/.env, restart the backend, reload the page.";
           const msg = document.createElement("div");
           msg.textContent =
             detail.length > 0 && !detail.startsWith("Veritas visual")

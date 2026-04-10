@@ -41,16 +41,18 @@ function cleanSecret(v) {
   return s;
 }
 
-/** Resolved API key for OpenAI (OPENAI_API_KEY, or REACT_APP_OPENAI_API_KEY if the former is empty). */
+/**
+ * Resolved API key for OpenAI.
+ * Reads process.env first (what dotenv loads from backend/.env), then the getEnv() snapshot.
+ * Priority: REACT_APP_OPENAI_API_KEY → OPENAI_API_KEY (matches common .env naming for this project).
+ */
 function resolveOpenAiApiKey(env) {
-  const a = cleanSecret(env.OPENAI_API_KEY);
-  if (a) return a;
-  const b = cleanSecret(env.REACT_APP_OPENAI_API_KEY);
-  if (b) return b;
-  // Fallback if env was set only on process.env after getEnv() snapshot (should be rare).
-  return (
-    cleanSecret(process.env.OPENAI_API_KEY) || cleanSecret(process.env.REACT_APP_OPENAI_API_KEY)
-  );
+  const fromProcess =
+    cleanSecret(process.env.REACT_APP_OPENAI_API_KEY) ||
+    cleanSecret(process.env.OPENAI_API_KEY);
+  if (fromProcess) return fromProcess;
+  const e = env || {};
+  return cleanSecret(e.REACT_APP_OPENAI_API_KEY) || cleanSecret(e.OPENAI_API_KEY);
 }
 
 module.exports = { getEnv, resolveOpenAiApiKey };

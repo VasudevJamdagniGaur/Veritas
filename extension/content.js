@@ -18,6 +18,30 @@
   const isLinkedIn = host === "linkedin.com";
   const isReddit = host === "reddit.com" || host === "old.reddit.com" || host === "new.reddit.com";
 
+  /**
+   * Extension messaging API (Chrome `chrome`, Firefox `browser`). Do not require `runtime.id` —
+   * it is often missing inside iframes / embedded contexts even though `sendMessage` works.
+   */
+  function extensionRuntime() {
+    try {
+      const g = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : null;
+      if (!g) return null;
+      const rt = g.chrome?.runtime || g.browser?.runtime;
+      if (rt && typeof rt.sendMessage === "function") return rt;
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+
+  function getLastRuntimeError() {
+    try {
+      return globalThis.chrome?.runtime?.lastError || globalThis.browser?.runtime?.lastError;
+    } catch {
+      return undefined;
+    }
+  }
+
   /** Single floating host for “check AI” on Instagram Reels (syncs to the primary visible video). */
   let reelAiHostEl = null;
   let reelAiBoundVideo = null;
@@ -461,14 +485,15 @@
   async function fetchAccountScore(scoreKey) {
     if (accountScoreCache.has(scoreKey)) return accountScoreCache.get(scoreKey);
     const p = (async () => {
-      if (typeof chrome !== "undefined" && chrome.runtime?.id) {
+      const extRt = extensionRuntime();
+      if (extRt) {
         try {
           const bg = await new Promise((resolve, reject) => {
             try {
-              chrome.runtime.sendMessage(
+              extRt.sendMessage(
                 { type: "VERITAS_SOCIAL_SCORE", handle: scoreKey },
                 (response) => {
-                  const err = chrome.runtime.lastError;
+                  const err = getLastRuntimeError();
                   if (err) {
                     reject(new Error(err.message));
                     return;
@@ -736,13 +761,14 @@
     };
 
     // https:// pages cannot fetch http://localhost (mixed content). Service worker can.
-    if (typeof chrome !== "undefined" && chrome.runtime?.id) {
+    const extRtAnalyze = extensionRuntime();
+    if (extRtAnalyze) {
       const bg = await new Promise((resolve, reject) => {
         try {
-          chrome.runtime.sendMessage(
+          extRtAnalyze.sendMessage(
             { type: "VERITAS_ANALYZE", ...body },
             (response) => {
-              const err = chrome.runtime.lastError;
+              const err = getLastRuntimeError();
               if (err) {
                 reject(new Error(err.message));
                 return;
@@ -772,12 +798,15 @@
    * background falls back to captureVisibleTab when images[] is empty.
    */
   async function analyzeReelVisual(text, images) {
-    if (typeof chrome === "undefined" || !chrome.runtime?.id) {
-      throw new Error("Extension required for reel visual analysis");
+    const extRtReel = extensionRuntime();
+    if (!extRtReel) {
+      throw new Error(
+        "Extension messaging unavailable here. Reload the page, update the Veritas extension, or use instagram.com in Chrome/Edge with the extension enabled (not an in-app browser)."
+      );
     }
     const bg = await new Promise((resolve, reject) => {
       try {
-        chrome.runtime.sendMessage(
+        extRtReel.sendMessage(
           {
             type: "VERITAS_ANALYZE_REEL",
             text,
@@ -785,7 +814,7 @@
             source: "extension",
           },
           (response) => {
-            const err = chrome.runtime.lastError;
+            const err = getLastRuntimeError();
             if (err) {
               reject(new Error(err.message));
               return;

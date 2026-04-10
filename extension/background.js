@@ -166,7 +166,8 @@ async function downscaleDataUrlIfLarge(dataUrl, maxWidth = 960) {
 function analyzeReelVisualViaApi(payload) {
   const ctrl = new AbortController();
   const tid = setTimeout(() => ctrl.abort(), 120000);
-  return fetch(`${VERITAS_API_BASE}/visual-analyze`, {
+  // Must match backend: POST /api/analyze-visual (same as http://localhost:5000/api/analyze-visual when VERITAS_API_BASE is http://localhost:5000/api)
+  return fetch(`${VERITAS_API_BASE}/analyze-visual`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

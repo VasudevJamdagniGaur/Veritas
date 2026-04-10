@@ -28,14 +28,14 @@ async function main() {
     res.json({ ok: true, dbReady: isDbReady() })
   );
 
-  // Mount reel vision here (not only under ./routes) so no nested-router / prefix bugs can hide POST /api/visual-analyze.
-  app.get("/api/visual-analyze", (_req, res) =>
+  // Mount reel vision on the app (before app.use("/api", …)) so POST /api/analyze-visual is never shadowed by /api/analyze.
+  app.get("/api/analyze-visual", (_req, res) =>
     res.json({
       ok: true,
-      hint: "POST JSON body: { text?: string, images: string[] } (data URLs). Extension uses this path.",
+      hint: "POST JSON body: { text?: string, images: string[] } (data URLs). Extension: POST http://localhost:5000/api/analyze-visual",
     })
   );
-  app.use("/api/visual-analyze", analyzeVisualRoutes);
+  app.use("/api/analyze-visual", analyzeVisualRoutes);
 
   app.use("/api", apiRoutes);
 
@@ -49,7 +49,7 @@ async function main() {
     // eslint-disable-next-line no-console
     console.log(`Veritas backend listening on http://localhost:${env.PORT}`);
     // eslint-disable-next-line no-console
-    console.log(`  Reel vision: POST http://localhost:${env.PORT}/api/visual-analyze`);
+    console.log(`  Reel vision: POST http://localhost:${env.PORT}/api/analyze-visual`);
     // eslint-disable-next-line no-console
     if (env.PORT === 5000) console.log("Backend running on port 5000");
   });

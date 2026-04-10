@@ -13,11 +13,13 @@ async function main() {
   if (!openaiKey) {
     // eslint-disable-next-line no-console
     console.warn(
-      "[Veritas] REACT_APP_OPENAI_API_KEY or OPENAI_API_KEY not set — reel visuals use mock until backend/.env has a key and you restart."
+      "[Veritas] No OpenAI key found after loading env files (project .env + backend/.env). Set REACT_APP_OPENAI_API_KEY or OPENAI_API_KEY, restart this server (stop any duplicate Node on the same port), then retry the extension."
     );
   } else {
     // eslint-disable-next-line no-console
-    console.log("[Veritas] OpenAI key loaded for text + reel vision (not logged).");
+    console.log(
+      `[Veritas] OpenAI API key OK (${openaiKey.length} chars; value not printed). Reel vision will call OpenAI with your frames.`
+    );
   }
 
   connectDb(env.MONGODB_URI).catch((e) => {

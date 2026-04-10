@@ -1,5 +1,6 @@
 const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+const { loadEnvFiles } = require("./lib/loadEnv");
+loadEnvFiles(path.join(__dirname, ".."));
 
 const { getEnv, resolveOpenAiApiKey } = require("./lib/env");
 const { connectDb } = require("./lib/db");

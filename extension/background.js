@@ -166,7 +166,7 @@ async function downscaleDataUrlIfLarge(dataUrl, maxWidth = 960) {
 function analyzeReelVisualViaApi(payload) {
   const ctrl = new AbortController();
   const tid = setTimeout(() => ctrl.abort(), 120000);
-  return fetch(`${VERITAS_API_BASE}/analyze-visual`, {
+  return fetch(`${VERITAS_API_BASE}/visual-analyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

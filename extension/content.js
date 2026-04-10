@@ -42,6 +42,18 @@
     }
   }
 
+  /** After extension reload/update, old content scripts cannot talk to the new background — user must refresh the tab. */
+  function formatExtensionMessagingError(raw) {
+    const m = String(raw?.message != null ? raw.message : raw || "");
+    if (/context invalidated/i.test(m)) {
+      return "This tab is still on an old Veritas session (extension was reloaded or updated). Refresh the page (F5), then tap Veritas AI again.";
+    }
+    if (/receiving end does not exist|could not establish connection/i.test(m)) {
+      return "Veritas background is not reachable. Refresh the page (F5), or reload the extension on chrome://extensions and then refresh this tab.";
+    }
+    return m;
+  }
+
   /** Single floating host for “check AI” on Instagram Reels (syncs to the primary visible video). */
   let reelAiHostEl = null;
   let reelAiBoundVideo = null;
@@ -288,6 +300,20 @@
         background: rgba(127, 29, 29, 0.85);
         border: 1px solid rgba(252, 165, 165, 0.4);
       }
+      .veritas-reel-ai-reload {
+        margin-top: 10px;
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        border: 1px solid rgba(252, 165, 165, 0.6);
+        background: rgba(254, 226, 226, 0.15);
+        color: #fff;
+      }
+      .veritas-reel-ai-reload:hover {
+        background: rgba(254, 226, 226, 0.28);
+      }
     `;
     document.documentElement.appendChild(style);
   }
@@ -495,7 +521,7 @@
                 (response) => {
                   const err = getLastRuntimeError();
                   if (err) {
-                    reject(new Error(err.message));
+                    reject(new Error(formatExtensionMessagingError(err)));
                     return;
                   }
                   resolve(response);
@@ -770,7 +796,7 @@
             (response) => {
               const err = getLastRuntimeError();
               if (err) {
-                reject(new Error(err.message));
+                reject(new Error(formatExtensionMessagingError(err)));
                 return;
               }
               resolve(response);
@@ -781,7 +807,7 @@
         }
       });
       if (bg && bg.ok === true && bg.data) return bg.data;
-      throw new Error(bg?.error || "Analyze failed");
+      throw new Error(formatExtensionMessagingError(bg?.error || "Analyze failed"));
     }
 
     const resp = await fetch(`${API_BASE}/analyze`, {
@@ -816,7 +842,7 @@
           (response) => {
             const err = getLastRuntimeError();
             if (err) {
-              reject(new Error(err.message));
+              reject(new Error(formatExtensionMessagingError(err)));
               return;
             }
             resolve(response);
@@ -827,7 +853,7 @@
       }
     });
     if (bg && bg.ok === true && bg.data) return bg.data;
-    throw new Error(bg?.error || "Reel visual analyze failed");
+    throw new Error(formatExtensionMessagingError(bg?.error || "Reel visual analyze failed"));
   }
 
   /** @returns {string | null} data URL or null if cross-origin / not ready */
@@ -1067,11 +1093,25 @@
         } catch (e) {
           const err = document.createElement("div");
           err.className = "veritas-reel-ai-error";
-          const detail = e && e.message ? String(e.message) : String(e);
-          err.textContent =
-            detail && detail.length > 0
-              ? `Veritas visual check failed:\n${detail}`
+          const raw = e && e.message ? String(e.message) : String(e);
+          const detail =
+            raw && raw.length > 0
+              ? formatExtensionMessagingError(raw)
               : "Veritas visual check failed (no details). Is the backend running on :5000? Add GEMINI_API_KEY to backend/.env (https://aistudio.google.com/apikey), restart the server, reload the extension.";
+          const msg = document.createElement("div");
+          msg.textContent =
+            detail.length > 0 && !detail.startsWith("Veritas visual")
+              ? `Veritas visual check failed:\n${detail}`
+              : detail;
+          err.appendChild(msg);
+          if (/Refresh the page|refresh this tab/i.test(detail)) {
+            const reload = document.createElement("button");
+            reload.type = "button";
+            reload.className = "veritas-reel-ai-reload";
+            reload.textContent = "Reload this page";
+            reload.addEventListener("click", () => location.reload());
+            err.appendChild(reload);
+          }
           reelAiHostEl.appendChild(err);
         } finally {
           btn.disabled = false;

@@ -15,27 +15,14 @@ const router = express.Router();
 
 /**
  * Try backends in order until one succeeds:
- * 1) GEMINI_API_KEY — Google AI Studio (simplest; no Vertex ADC)
- * 2) Vertex (VERTEX_PROJECT / GOOGLE_CLOUD_PROJECT + ADC)
+ * 1) Vertex (service account / VERTEX_PROJECT + ADC)
+ * 2) GEMINI_API_KEY — Google AI Studio
  * 3) OpenAI (optional)
  * 4) Mock if nothing configured
  */
 async function runVisualBackends(env, text, images) {
   const errors = [];
   const geminiKey = env.GEMINI_API_KEY && String(env.GEMINI_API_KEY).trim();
-  if (geminiKey) {
-    try {
-      const a = await analyzeVisualGeminiApi({
-        apiKey: geminiKey,
-        model: env.GEMINI_MODEL,
-        text,
-        images,
-      });
-      return { analysis: a, provider: "gemini" };
-    } catch (e) {
-      errors.push(`Gemini API: ${String(e?.message || e)}`);
-    }
-  }
 
   const vertexProject = resolveVertexProjectId(env);
 
@@ -51,6 +38,20 @@ async function runVisualBackends(env, text, images) {
       return { analysis: a, provider: "vertex" };
     } catch (e) {
       errors.push(`Vertex: ${String(e?.message || e)}`);
+    }
+  }
+
+  if (geminiKey) {
+    try {
+      const a = await analyzeVisualGeminiApi({
+        apiKey: geminiKey,
+        model: env.GEMINI_MODEL,
+        text,
+        images,
+      });
+      return { analysis: a, provider: "gemini" };
+    } catch (e) {
+      errors.push(`Gemini API: ${String(e?.message || e)}`);
     }
   }
 
@@ -79,10 +80,8 @@ async function runVisualBackends(env, text, images) {
   const err = new Error(detail || "All vision backends failed");
   err.statusCode = 502;
   err.hint =
-    "Easiest fix: add GEMINI_API_KEY from https://aistudio.google.com/apikey to backend/.env and restart. " +
-    "For Vertex: set GOOGLE_APPLICATION_CREDENTIALS to your service account JSON path (project_id is read automatically), " +
-    "or set VERTEX_PROJECT, enable Vertex AI API + billing, and grant the SA Vertex AI User. " +
-    "Or set OPENAI_API_KEY.";
+    "Vertex: GOOGLE_APPLICATION_CREDENTIALS or VERTEX_SERVICE_ACCOUNT_KEY → service account JSON; VERTEX_PROJECT or project_id in JSON; enable Vertex AI API + Vertex AI User on the SA. " +
+    "Or GEMINI_API_KEY from https://aistudio.google.com/apikey. Or OPENAI_API_KEY.";
   throw err;
 }
 

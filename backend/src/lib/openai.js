@@ -126,7 +126,7 @@ function mockAnalyzeVisual(text, imageCount) {
   return {
     aiScore: 55,
     aiGeneratedProbability: 0.45,
-    explanation: `No GEMINI_API_KEY, no working Vertex/OpenAI: mock only. Add GEMINI_API_KEY (Google AI Studio) to .env for reel visuals. ${imageCount} frame(s). Caption: ${snippet || "(none)"}`,
+    explanation: `No vision backend configured or all failed. For Vertex AI: set GOOGLE_APPLICATION_CREDENTIALS or VERTEX_SERVICE_ACCOUNT_KEY to your service account JSON path, and VERTEX_PROJECT or project_id in that JSON (backend/.env). Or set GEMINI_API_KEY. Mock only. ${imageCount} frame(s). Caption: ${snippet || "(none)"}`,
   };
 }
 

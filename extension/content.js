@@ -1097,7 +1097,7 @@
           const detail =
             raw && raw.length > 0
               ? formatExtensionMessagingError(raw)
-              : "Veritas visual check failed (no details). Is the backend running on :5000? Add GEMINI_API_KEY to backend/.env (https://aistudio.google.com/apikey), restart the server, reload the extension.";
+              : "Veritas visual check failed (no details). Is the backend on :5000? For Vertex: set GOOGLE_APPLICATION_CREDENTIALS (or VERTEX_SERVICE_ACCOUNT_KEY) to your service account JSON in backend/.env, restart, reload the extension. Or use GEMINI_API_KEY.";
           const msg = document.createElement("div");
           msg.textContent =
             detail.length > 0 && !detail.startsWith("Veritas visual")

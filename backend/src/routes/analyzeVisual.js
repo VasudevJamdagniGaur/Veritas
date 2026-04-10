@@ -29,7 +29,7 @@ async function runVisualBackends(env, text, images) {
       const err = new Error(String(e?.response?.data?.error?.message || e?.message || e));
       err.statusCode = 502;
       err.hint =
-        "Check OPENAI_API_KEY or REACT_APP_OPENAI_API_KEY in backend/.env, billing, and OPENAI_MODEL (vision-capable, e.g. gpt-4o-mini).";
+        "Check OPENAI_API_KEY in backend/.env, billing, and OPENAI_MODEL (vision-capable, e.g. gpt-4o-mini).";
       throw err;
     }
   }

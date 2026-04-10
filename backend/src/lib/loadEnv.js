@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const OPENAI_KEYS = new Set(["REACT_APP_OPENAI_API_KEY", "OPENAI_API_KEY"]);
+const OPENAI_KEYS = new Set(["OPENAI_API_KEY"]);
 
 function stripBom(s) {
   if (s.charCodeAt(0) === 0xfeff) return s.slice(1);

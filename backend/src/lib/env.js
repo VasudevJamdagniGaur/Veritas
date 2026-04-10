@@ -5,11 +5,6 @@ const EnvSchema = z.object({
   MONGODB_URI: z.string().min(1),
   /** OpenAI API key for text + reel vision (keep in .env only; never commit). */
   OPENAI_API_KEY: z.string().optional().default(""),
-  /**
-   * Optional alias for the same key (e.g. if you copied from a CRA-style .env).
-   * Prefer OPENAI_API_KEY for this Node server.
-   */
-  REACT_APP_OPENAI_API_KEY: z.string().optional().default(""),
   /** Use a vision-capable model for reel frames (e.g. gpt-4o-mini, gpt-4o). */
   OPENAI_MODEL: z.string().optional().default("gpt-4o-mini"),
   JWT_SECRET: z.string().min(1).default("dev-secret-change-me"),
@@ -41,18 +36,11 @@ function cleanSecret(v) {
   return s;
 }
 
-/**
- * Resolved API key for OpenAI.
- * Reads process.env first (what dotenv loads from backend/.env), then the getEnv() snapshot.
- * Priority: REACT_APP_OPENAI_API_KEY → OPENAI_API_KEY (matches common .env naming for this project).
- */
+/** Resolved OpenAI API key from process.env (dotenv) then getEnv() snapshot. */
 function resolveOpenAiApiKey(env) {
-  const fromProcess =
-    cleanSecret(process.env.REACT_APP_OPENAI_API_KEY) ||
-    cleanSecret(process.env.OPENAI_API_KEY);
+  const fromProcess = cleanSecret(process.env.OPENAI_API_KEY);
   if (fromProcess) return fromProcess;
-  const e = env || {};
-  return cleanSecret(e.REACT_APP_OPENAI_API_KEY) || cleanSecret(e.OPENAI_API_KEY);
+  return cleanSecret(env?.OPENAI_API_KEY);
 }
 
 module.exports = { getEnv, resolveOpenAiApiKey };

@@ -1063,7 +1063,7 @@
           const detail =
             raw && raw.length > 0
               ? formatExtensionMessagingError(raw)
-              : "Veritas visual check failed (no details). Is the backend on :5000? Set REACT_APP_OPENAI_API_KEY (or OPENAI_API_KEY) in backend/.env, restart the backend, reload the page.";
+              : "Veritas visual check failed (no details). Is the backend on :5000? Set OPENAI_API_KEY in backend/.env, restart the backend, reload the page.";
           const msg = document.createElement("div");
           msg.textContent =
             detail.length > 0 && !detail.startsWith("Veritas visual")

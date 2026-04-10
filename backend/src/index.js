@@ -13,7 +13,7 @@ async function main() {
   if (!openaiKey) {
     // eslint-disable-next-line no-console
     console.warn(
-      "[Veritas] No OpenAI key found after loading env files (project .env + backend/.env). Set REACT_APP_OPENAI_API_KEY or OPENAI_API_KEY, restart this server (stop any duplicate Node on the same port), then retry the extension."
+      "[Veritas] No OpenAI key found after loading env files (project .env + backend/.env). Set OPENAI_API_KEY, restart this server (stop any duplicate Node on the same port), then retry the extension."
     );
   } else {
     // eslint-disable-next-line no-console

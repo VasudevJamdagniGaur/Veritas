@@ -126,7 +126,7 @@ function mockAnalyzeVisual(text, imageCount) {
   return {
     aiScore: 55,
     aiGeneratedProbability: 0.45,
-    explanation: `No OpenAI API key found (checked project .env and backend/.env). Mock only. Add REACT_APP_OPENAI_API_KEY or OPENAI_API_KEY, save, stop any old server on the port, run npm start from the backend folder, reload the extension page. ${imageCount} frame(s). Caption: ${snippet || "(none)"}`,
+    explanation: `No OpenAI API key found (checked project .env and backend/.env). Mock only. Add OPENAI_API_KEY, save, stop any old server on the port, run npm start from the backend folder, reload the extension page. ${imageCount} frame(s). Caption: ${snippet || "(none)"}`,
   };
 }
 

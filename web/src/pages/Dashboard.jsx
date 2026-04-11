@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { deleteVeritasAccount } from "../lib/deleteAccount";
 import { useApp } from "../state/appState";
 import { ProfileMenu, Shell } from "../components/Ui";
 

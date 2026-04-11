@@ -1,6 +1,7 @@
 const express = require("express");
 const { z } = require("zod");
 const User = require("../models/User");
+const Post = require("../models/Post");
 const { calculateBotScore, clamp } = require("../lib/scoring");
 const { maybeWriteVerification } = require("../lib/chain");
 const { isDbReady } = require("../lib/db");
@@ -167,6 +168,24 @@ router.post("/set-username", async (req, res) => {
   await user.save();
   await persistWalletIdMongo(user);
   return res.json({ user });
+});
+
+router.delete("/:id", async (req, res) => {
+  const userId = req.params.id;
+  if (!userId || String(userId).length < 2) {
+    return res.status(400).json({ error: "Invalid user id" });
+  }
+
+  if (!isDbReady()) {
+    const result = memoryStore.deleteUser(userId);
+    if (result.error) return res.status(404).json({ error: result.error });
+    return res.json({ ok: true, db: "memory" });
+  }
+
+  const deleted = await User.findByIdAndDelete(userId);
+  if (!deleted) return res.status(404).json({ error: "User not found" });
+  await Post.deleteMany({ userId: deleted._id });
+  return res.json({ ok: true });
 });
 
 router.get("/:id", async (req, res) => {

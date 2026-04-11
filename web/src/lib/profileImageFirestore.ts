@@ -1,5 +1,5 @@
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
-import { getDownloadURL, ref, uploadString } from "firebase/storage";
+import { deleteDoc, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { deleteObject, getDownloadURL, ref, uploadString } from "firebase/storage";
 import { db, storage } from "./firebase";
 
 const COLLECTION = "veritas_profiles";
@@ -32,4 +32,18 @@ export async function loadFaceImageUrl(veritasUserId: string): Promise<string | 
   if (!snap.exists()) return null;
   const data = snap.data() as { faceImageUrl?: string };
   return data.faceImageUrl || null;
+}
+
+/** Best-effort removal of profile doc and face image in Firebase (rules may deny). */
+export async function deleteProfileFromFirebase(veritasUserId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, COLLECTION, veritasUserId));
+  } catch {
+    // ignore
+  }
+  try {
+    await deleteObject(ref(storage, `${STORAGE_PREFIX}/${veritasUserId}.jpg`));
+  } catch {
+    // ignore
+  }
 }

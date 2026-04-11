@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api, type User } from "../lib/api";
 import { saveFaceCaptureToFirebase } from "../lib/profileImageFirestore";
 import { stripFaceCaptureDataUrl } from "../lib/userFields";
+import { deleteVeritasAccount } from "../lib/deleteAccount";
 import { useApp } from "../state/appState";
 import { Button, CameraGlyph, Card, ProfileMenu, Shell } from "../components/Ui";
 

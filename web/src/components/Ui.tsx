@@ -200,6 +200,7 @@ export function ProfileMenu({
   username,
   avatarSrc,
   walletId,
+  onDeleteAccount,
   subtextWhenEmpty = "Capture & Verify to save your photo here",
   subtextWhenPhoto = "Verification capture",
   footer,
@@ -208,6 +209,8 @@ export function ProfileMenu({
   avatarSrc: string;
   /** Unique 24-character Veritas-issued wallet ID (from server at signup) */
   walletId?: string;
+  /** Permanently delete account (single action). */
+  onDeleteAccount?: (close: () => void) => void | Promise<void>;
   subtextWhenEmpty?: string;
   subtextWhenPhoto?: string;
   footer?: (close: () => void) => React.ReactNode;
@@ -294,6 +297,18 @@ export function ProfileMenu({
               )}
             </div>
           </div>
+
+          {onDeleteAccount ? (
+            <div className="mt-4 w-full border-t border-white/10 pt-3">
+              <button
+                type="button"
+                onClick={() => void Promise.resolve(onDeleteAccount(() => setOpen(false)))}
+                className="w-full rounded-xl border border-rose-500/35 bg-rose-500/10 px-3 py-2.5 text-sm font-medium text-rose-100 transition hover:bg-rose-500/20"
+              >
+                Delete account
+              </button>
+            </div>
+          ) : null}
 
           {footer ? (
             <div className="mt-4 border-t border-white/10 pt-3">{footer(() => setOpen(false))}</div>

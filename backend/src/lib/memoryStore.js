@@ -126,6 +126,15 @@ function listPosts() {
   return state.posts.slice(0, 100);
 }
 
+function deleteUser(userId) {
+  const user = findUserById(userId);
+  if (!user) return { error: "User not found" };
+  state.usersById.delete(user._id);
+  state.usersByUsername.delete(user.username);
+  state.posts = state.posts.filter((p) => String(p.userId || "") !== String(user._id));
+  return { ok: true };
+}
+
 module.exports = {
   memoryStore: {
     getOrCreateUser,
@@ -136,6 +145,7 @@ module.exports = {
     setUsername,
     addPost,
     listPosts,
+    deleteUser,
   },
   sanitizeUsername,
 };

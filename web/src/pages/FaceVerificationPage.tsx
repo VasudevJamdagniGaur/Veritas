@@ -9,7 +9,7 @@ import { Button, CameraGlyph, Card, ProfileMenu, Shell } from "../components/Ui"
 
 export default function FaceVerificationPage() {
   const nav = useNavigate();
-  const { user, setUser } = useApp();
+  const { user, setUser, logout } = useApp();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -198,6 +198,24 @@ export default function FaceVerificationPage() {
           username={user?.username || "Not logged in"}
           avatarSrc={avatarSrc}
           walletId={user?.walletId}
+          onDeleteAccount={
+            user?._id
+              ? async (close) => {
+                  close();
+                  try {
+                    await deleteVeritasAccount(user._id);
+                  } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.error(e);
+                    window.alert("Could not delete your account. Try again.");
+                    return;
+                  }
+                  logout();
+                  localStorage.removeItem("veritas.pendingUsername");
+                  nav("/");
+                }
+              : undefined
+          }
           footer={(close) => (
             <>
               <button

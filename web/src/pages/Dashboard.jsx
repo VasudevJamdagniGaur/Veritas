@@ -252,6 +252,24 @@ export default function Dashboard() {
             username={viewUser.username}
             avatarSrc={user?.faceImageUrl || user?.faceCaptureDataUrl || ""}
             walletId={user?.walletId}
+            onDeleteAccount={
+              user?._id
+                ? async (close) => {
+                    close();
+                    try {
+                      await deleteVeritasAccount(user._id);
+                    } catch (e) {
+                      // eslint-disable-next-line no-console
+                      console.error(e);
+                      window.alert("Could not delete your account. Try again.");
+                      return;
+                    }
+                    logout();
+                    localStorage.removeItem("veritas.pendingUsername");
+                    nav("/");
+                  }
+                : undefined
+            }
             subtextWhenEmpty="No verification photo on file"
             subtextWhenPhoto="Verification capture"
             footer={(close) => (

@@ -259,11 +259,11 @@ export function AccountCard({ user, userId, onLinked }) {
   ];
 
   return (
-    <Card>
+    <Card className="lg:col-span-3">
       <div className="text-xs uppercase tracking-wide text-gray-400">Connected account</div>
       <div className="mt-1 text-lg font-semibold text-white">Social identity</div>
 
-      <div className="mt-4 grid gap-3">
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {rows.map((row) => (
           <SocialConnectRow
             key={row.key}

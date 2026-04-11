@@ -18,6 +18,16 @@ const EnvSchema = z.object({
   RPC_URL: z.string().optional().default("http://127.0.0.1:8545"),
   VERITAS_CONTRACT_ADDRESS: z.string().optional().default(""),
   SIGNER_PRIVATE_KEY: z.string().optional().default(""),
+
+  /** Optional: News aggregation APIs (server-side only; never expose to web bundle). */
+  NEWSAPI_KEY: z.string().optional().default(""),
+  NEWSAPI_KEY_2: z.string().optional().default(""),
+  WORLDNEWS_API_KEY: z.string().optional().default(""),
+  WORLDNEWS_API_KEY_2: z.string().optional().default(""),
+  GNEWS_API_KEY: z.string().optional().default(""),
+  GNEWS_API_KEY_2: z.string().optional().default(""),
+  THENEWS_API_TOKEN: z.string().optional().default(""),
+  THENEWS_API_TOKEN_2: z.string().optional().default(""),
 });
 
 function getEnv() {

@@ -130,17 +130,17 @@ export default function FaceVerificationPage() {
         return;
       }
     }
+    const captureDataUrl = capture();
+    if (captureDataUrl) setSessionCaptureUrl(captureDataUrl);
     setVerifyErr("");
     setLoading(true);
     try {
-      const captureDataUrl = capture();
-      if (captureDataUrl) setSessionCaptureUrl(captureDataUrl);
       const resp = await api.post<{ user: User }>("/user/verify-face", {
         userId: u._id,
         captureDataUrl,
       });
       setUser(resp.data.user);
-      nav("/dashboard");
+      nav("/link-social");
     } catch (e: any) {
       // If backend is temporarily unavailable, keep the demo flow unblocked.
       setVerifyErr(e?.response?.data?.error || e?.message || "Verification failed (backend not ready).");
@@ -150,7 +150,7 @@ export default function FaceVerificationPage() {
         trustScore: Math.min(100, (u.trustScore ?? 50) + 15),
         faceCaptureDataUrl: captureDataUrl || u.faceCaptureDataUrl,
       });
-      nav("/dashboard");
+      nav("/link-social");
     } finally {
       setLoading(false);
     }

@@ -38,6 +38,10 @@ function getOrCreateUser({ username }) {
     isHumanVerified: false,
     socialHandle: "",
     socialUrl: "",
+    linkedinUrl: "",
+    redditUsername: "",
+    instagramHandle: "",
+    xHandle: "",
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
@@ -77,6 +81,8 @@ function findUserByInstagramHandle(handle) {
     if (String(user.username || "").toLowerCase() === h) return user;
     const sh = normalizeIgHandle(user.socialHandle || "");
     if (sh && sh === h) return user;
+    const ig = normalizeIgHandle(user.instagramHandle || "");
+    if (ig && ig === h) return user;
     const url = String(user.socialUrl || "").toLowerCase();
     if (url.includes(`instagram.com/${h}`) || url.includes(`instagram.com/${h}/`)) return user;
   }

@@ -10,6 +10,10 @@ const UserSchema = new mongoose.Schema(
     socialHandle: { type: String, default: "" },
     socialUrl: { type: String, default: "" },
     faceCaptureDataUrl: { type: String, default: "" },
+    linkedinUrl: { type: String, default: "" },
+    redditUsername: { type: String, default: "" },
+    instagramHandle: { type: String, default: "" },
+    xHandle: { type: String, default: "" },
   },
   { timestamps: true }
 );

@@ -56,6 +56,10 @@ export type User = {
   socialUrl?: string;
   /** Data URL from last successful face verification capture */
   faceCaptureDataUrl?: string;
+  linkedinUrl?: string;
+  redditUsername?: string;
+  instagramHandle?: string;
+  xHandle?: string;
 };
 
 export type AnalyzeResponse = {

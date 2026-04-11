@@ -16,7 +16,14 @@ function calculateBotScore(user) {
   let score = 40;
 
   if (!user.isHumanVerified) score += 30;
-  if (!user.socialHandle && !user.socialUrl) score += 10;
+  const hasSocial =
+    user.socialHandle ||
+    user.socialUrl ||
+    user.linkedinUrl ||
+    user.redditUsername ||
+    user.instagramHandle ||
+    user.xHandle;
+  if (!hasSocial) score += 10;
 
   const createdAt = user.createdAt ? new Date(user.createdAt).getTime() : null;
   if (createdAt) {

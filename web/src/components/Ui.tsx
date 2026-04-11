@@ -235,11 +235,19 @@ export function ProfileMenu({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm font-medium text-white shadow-sm backdrop-blur transition hover:bg-white/10"
+        className="inline-flex items-center gap-2.5 rounded-xl border border-white/15 bg-white/5 py-1.5 pl-1.5 pr-3 text-sm font-medium text-white shadow-sm backdrop-blur transition hover:bg-white/10"
         aria-expanded={open}
         aria-haspopup="dialog"
       >
-        <ProfileGlyph />
+        <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full border border-white/20 bg-white/5 ring-1 ring-white/10">
+          {hasPhoto ? (
+            <img src={avatarSrc} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center text-gray-500">
+              <ProfileGlyph className="h-5 w-5 opacity-60" />
+            </span>
+          )}
+        </span>
         Profile
       </button>
       {open ? (

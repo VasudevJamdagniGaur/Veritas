@@ -60,6 +60,9 @@ router.get("/trust/:handle", async (req, res) => {
         socialHandle: { $in: [handle, `@${handle}`] },
       })) ||
       (await User.findOne({
+        instagramHandle: { $in: [handle, handle.replace(/^@/, "")] },
+      })) ||
+      (await User.findOne({
         socialUrl: new RegExp(`instagram\\.com\\/${handle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i"),
       }));
     if (user) {

@@ -167,6 +167,10 @@ export default function FaceVerificationPage() {
         <p className="mt-2 max-w-2xl text-sm text-gray-300">
           Proof-of-human: we capture a webcam frame and mark your account verified (no heavy ML).
         </p>
+        <p className="mt-3 max-w-2xl text-sm text-gray-400">
+          Next: <span className="text-pink-200/90">Step 3</span> — connect Reddit, Instagram, X, and LinkedIn, then
+          continue to your dashboard.
+        </p>
       </div>
 
       <div className="grid gap-5 md:grid-cols-2">

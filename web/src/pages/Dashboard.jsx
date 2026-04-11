@@ -122,6 +122,22 @@ export function ExtensionCard({ onInstall }) {
   );
 }
 
+function socialPayloadOk(platformKey, parsed) {
+  if (!parsed || typeof parsed !== "object") return false;
+  switch (platformKey) {
+    case "instagram":
+      return Boolean(String(parsed.instagramHandle || "").trim());
+    case "reddit":
+      return Boolean(String(parsed.redditUsername || "").trim());
+    case "x":
+      return Boolean(String(parsed.xHandle || "").trim());
+    case "linkedin":
+      return Boolean(String(parsed.linkedinUrl || "").trim());
+    default:
+      return false;
+  }
+}
+
 function SocialConnectRow({ platformKey, label, connected, detail, userId, onLinked }) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -139,7 +155,10 @@ function SocialConnectRow({ platformKey, label, connected, detail, userId, onLin
       setErr(parsed.error);
       return;
     }
-    if (!parsed || "error" in parsed) return;
+    if (!socialPayloadOk(platformKey, parsed)) {
+      setErr("Could not read a username from that. Paste your profile URL from the browser bar or your @handle.");
+      return;
+    }
     setSaving(true);
     try {
       const resp = await api.post("/user/link-social", {
@@ -150,7 +169,13 @@ function SocialConnectRow({ platformKey, label, connected, detail, userId, onLin
       setInput("");
       setOpen(false);
     } catch (e) {
-      const msg = e?.response?.data?.error || e?.message || "Could not save.";
+      const data = e?.response?.data;
+      let msg = data?.error || e?.message || "Could not save.";
+      if (data?.details?.[0]) {
+        const d = data.details[0];
+        const hint = [d.path?.filter(Boolean).join("."), d.message].filter(Boolean).join(": ");
+        if (hint) msg = `${msg} — ${hint}`;
+      }
       setErr(msg);
     } finally {
       setSaving(false);
@@ -182,10 +207,12 @@ function SocialConnectRow({ platformKey, label, connected, detail, userId, onLin
       {!connected && open ? (
         <div className="mt-3 space-y-2">
           <input
-            type="url"
+            type="text"
+            inputMode="url"
+            autoComplete="url"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Paste profile URL (https://…)"
+            placeholder="Paste profile URL or @username"
             className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-[#E91E63]/50"
           />
           {err ? <div className="text-xs text-rose-300">{err}</div> : null}

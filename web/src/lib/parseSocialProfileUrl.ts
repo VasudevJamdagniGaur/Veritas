@@ -1,6 +1,16 @@
+/** Strip zero-width / BOM and surrounding quotes from pasted text. */
+function cleanPaste(raw: string): string {
+  return raw
+    .trim()
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    /** Clipboard often adds newlines inside long URLs */
+    .replace(/[\n\r\v\f]+/g, "")
+    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "");
+}
+
 /** Normalize pasted text into a URL when possible. */
 function toUrl(raw: string): URL | null {
-  const t = raw.trim();
+  const t = cleanPaste(raw);
   if (!t) return null;
   try {
     return new URL(t.includes("://") ? t : `https://${t}`);
@@ -9,7 +19,21 @@ function toUrl(raw: string): URL | null {
   }
 }
 
-const RESERVED_IG = new Set(["p", "reel", "reels", "stories", "explore", "accounts", "direct", "tv"]);
+const RESERVED_IG = new Set([
+  "p",
+  "reel",
+  "reels",
+  "stories",
+  "explore",
+  "accounts",
+  "direct",
+  "tv",
+  "publishing",
+  "_u",
+]);
+
+/** Instagram sometimes prefixes the path with a locale: /en/username/ */
+const IG_LOCALE = /^(?:[a-z]{2}(?:-[a-z]{2,4})?)$/i;
 
 export type SocialPlatformKey = "reddit" | "instagram" | "x" | "linkedin";
 
@@ -20,6 +44,94 @@ export type ParsedSocialForApi = {
   xHandle?: string;
 };
 
+function isInstagramHost(host: string): boolean {
+  const h = host.replace(/^www\./, "").toLowerCase();
+  return (
+    h === "instagram.com" ||
+    h.endsWith(".instagram.com") ||
+    h === "instagr.am" ||
+    h === "ig.me"
+  );
+}
+
+/**
+ * Pull username from pathname; skip one leading locale segment if present.
+ */
+function extractInstagramHandleFromPathname(pathname: string): string | null {
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts.length === 0) return null;
+  /** Path like /en only — not a profile */
+  if (parts.length === 1 && IG_LOCALE.test(parts[0])) return null;
+
+  let idx = 0;
+  if (parts.length >= 2 && IG_LOCALE.test(parts[0])) {
+    idx = 1;
+  }
+  /** Mobile web profile URLs: /_u/handle/ */
+  if (parts[idx] === "_u" && parts.length > idx + 1) {
+    idx += 1;
+  }
+
+  const seg = parts[idx];
+  if (!seg) return null;
+  const lower = seg.toLowerCase();
+  if (RESERVED_IG.has(lower)) return null;
+
+  const handle = decodeURIComponent(seg).replace(/^@/, "").split("?")[0];
+  if (!handle || !/^[\w.]+$/.test(handle)) return null;
+  return handle.toLowerCase();
+}
+
+function parseInstagramFromUrl(url: URL): ParsedSocialForApi | { error: string } {
+  const host = url.hostname.replace(/^www\./, "").toLowerCase();
+
+  /** Short links: resolve redirect params to the real profile URL */
+  if (host === "l.instagram.com" || host.endsWith(".l.instagram.com")) {
+    let jump: string | null = null;
+    for (const k of ["u", "url", "href", "next"]) {
+      const v = url.searchParams.get(k);
+      if (v) {
+        jump = v;
+        break;
+      }
+    }
+    if (jump) {
+      try {
+        let decoded = decodeURIComponent(jump.replace(/\+/g, " "));
+        if (decoded.startsWith("//")) decoded = `https:${decoded}`;
+        if (decoded.startsWith("/") && !decoded.startsWith("//")) {
+          decoded = `https://www.instagram.com${decoded}`;
+        }
+        const nested = toUrl(decoded);
+        if (nested) return parseInstagramFromUrl(nested);
+      } catch {
+        /* fall through */
+      }
+    }
+    return { error: "Open the profile in a browser and copy the address bar URL (l.instagram.com links need the profile URL)." };
+  }
+
+  if (!isInstagramHost(host)) {
+    return { error: "Not an Instagram link." };
+  }
+
+  const handle = extractInstagramHandleFromPathname(url.pathname);
+  if (handle) return { instagramHandle: handle };
+
+  return { error: "Use your profile link, e.g. instagram.com/yourusername" };
+}
+
+/**
+ * Plain handle with no URL: my.name or @my.name
+ */
+function tryInstagramPlainText(raw: string): ParsedSocialForApi | null {
+  const t = cleanPaste(raw);
+  if (!t || /:\/\//.test(t)) return null;
+  const h = t.replace(/^@/, "").trim();
+  if (!/^[\w.]{1,30}$/.test(h)) return null;
+  return { instagramHandle: h.toLowerCase() };
+}
+
 /**
  * Extracts profile identifiers from a pasted URL for the given platform.
  * Returns `{ error: string }` if the link cannot be parsed.
@@ -28,8 +140,18 @@ export function parsePastedSocialLink(
   platform: SocialPlatformKey,
   raw: string
 ): ParsedSocialForApi | { error: string } {
+  if (platform === "instagram") {
+    const plain = tryInstagramPlainText(raw);
+    if (plain) return plain;
+  }
+
   const url = toUrl(raw);
-  if (!url) return { error: "Paste a valid link or URL." };
+  if (!url) {
+    if (platform === "instagram") {
+      return { error: "Paste your profile URL (e.g. instagram.com/username) or your @username." };
+    }
+    return { error: "Paste a valid link or URL." };
+  }
 
   const host = url.hostname.replace(/^www\./, "").toLowerCase();
 
@@ -40,15 +162,8 @@ export function parsePastedSocialLink(
       if (!m?.[1]) return { error: "Could not find a Reddit username in this link." };
       return { redditUsername: decodeURIComponent(m[1]).replace(/^u\//i, "") };
     }
-    case "instagram": {
-      if (!host.includes("instagram.com")) return { error: "Not an Instagram link." };
-      const parts = url.pathname.split("/").filter(Boolean);
-      const first = parts[0];
-      if (!first || RESERVED_IG.has(first.toLowerCase())) {
-        return { error: "Use a profile URL (e.g. instagram.com/username)." };
-      }
-      return { instagramHandle: first.split("?")[0].toLowerCase() };
-    }
+    case "instagram":
+      return parseInstagramFromUrl(url);
     case "x": {
       if (!host.includes("x.com") && !host.includes("twitter.com")) {
         return { error: "Not an X (Twitter) profile link." };

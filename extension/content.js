@@ -525,14 +525,15 @@
         gap: 6px;
         pointer-events: none;
       }
-      /* X/Twitter: AI tick + fact-check logo in one horizontal cluster (no overlap) */
+      /* X/Twitter: AI tick + fact-check — compact (match ~Grok inline size), inset so Grok/native rail stay visible */
       .veritas-fc-anchor.veritas-fc-anchor--x-actions {
         flex-direction: row;
         flex-wrap: wrap;
         align-items: center;
         justify-content: flex-end;
         align-content: flex-start;
-        gap: 8px;
+        gap: 6px;
+        right: 64px;
       }
       .veritas-fc-anchor.veritas-fc-anchor--x-actions .veritas-fc-popover {
         flex: 0 0 100%;
@@ -543,20 +544,41 @@
         margin-bottom: 0;
       }
       .veritas-fc-anchor.veritas-fc-anchor--x-actions .veritas-fc-logo-btn {
-        padding: 4px 5px;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        min-width: 30px;
+        min-height: 30px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 1px 6px rgba(0, 0, 0, 0.28);
+      }
+      .veritas-fc-anchor.veritas-fc-anchor--x-actions .veritas-fc-logo-btn:hover:not(:disabled) {
+        transform: none;
       }
       .veritas-fc-anchor.veritas-fc-anchor--x-actions .veritas-fc-svg {
-        width: 22px;
-        height: 24px;
+        width: 18px;
+        height: 20px;
       }
       .veritas-fc-anchor.veritas-fc-anchor--x-actions .veritas-x-text-origin {
-        width: 32px;
-        height: 28px;
-        border-radius: 9px;
+        width: 30px;
+        height: 30px;
+        min-width: 30px;
+        min-height: 30px;
+        border-radius: 999px;
+        padding: 0;
       }
       .veritas-fc-anchor.veritas-fc-anchor--x-actions .veritas-x-text-origin svg {
-        width: 20px;
-        height: 20px;
+        width: 18px;
+        height: 18px;
+      }
+      .veritas-fc-anchor.veritas-fc-anchor--x-actions .veritas-x-text-origin--err {
+        width: 30px;
+        min-width: 30px;
+        padding: 0;
+        font-size: 13px;
       }
       .veritas-fc-anchor > * {
         pointer-events: auto;

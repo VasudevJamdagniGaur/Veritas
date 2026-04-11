@@ -86,8 +86,12 @@ export default function LoginPage() {
 
       <div className="grid gap-5 md:grid-cols-1">
         <Card>
-          <div className="text-sm font-semibold text-white">Sign up</div>
-          <div className="mt-1 text-xs text-gray-400">Use your Google account to create a Veritas profile.</div>
+          <div className="text-center">
+            <div className="text-sm font-semibold text-white">Sign up</div>
+            <div className="mt-1 text-xs text-gray-400">
+              Use your Google account to create a Veritas profile.
+            </div>
+          </div>
           <div className="mt-5">
             {err ? <div className="mb-3 text-sm text-rose-300">{err}</div> : null}
             <button

@@ -76,7 +76,8 @@ function mockAnalyze(text) {
 async function openAiAnalyze({ apiKey, model, text }) {
   const prompt = [
     "You are Veritas, a trust layer for social media.",
-    "Analyze the given post text for credibility and whether it is likely AI-generated.",
+    "Analyze the given post text for credibility.",
+    "Judge whether it reads as authentic human-written content (including casual, conversational, personal, or informal phrasing that might resemble notes or handwritten tone) versus likely AI-generated or heavily templated machine text.",
     "Return STRICT JSON ONLY with keys:",
     "aiScore (0-100), aiGeneratedProbability (0-1), explanation (string, 1-2 sentences).",
     "Be cautious and realistic.",

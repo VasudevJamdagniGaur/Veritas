@@ -127,6 +127,9 @@
         font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
         color: #E5E7EB;
       }
+      .veritas-card.veritas-card--x-hidden {
+        display: none;
+      }
       .veritas-row { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
       .veritas-badge {
         display:inline-flex; align-items:center; gap:8px;
@@ -211,6 +214,67 @@
         display: block;
         margin: 0 auto;
       }
+
+      /* X/Twitter: text-only AI vs human hint (no vision / no image capture) */
+      .veritas-x-text-origin-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+        min-height: 28px;
+      }
+      .veritas-x-text-origin {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 32px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(0, 0, 0, 0.35);
+        box-sizing: border-box;
+      }
+      .veritas-x-text-origin--loading {
+        border-color: rgba(161, 161, 170, 0.5);
+        color: #a1a1aa;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        animation: veritas-x-origin-pulse 1s ease-in-out infinite;
+      }
+      @keyframes veritas-x-origin-pulse {
+        50% { opacity: 0.45; }
+      }
+      .veritas-x-text-origin--human {
+        border-color: rgba(74, 222, 128, 0.55);
+        background: rgba(34, 197, 94, 0.12);
+      }
+      .veritas-x-text-origin--ai {
+        border-color: rgba(248, 113, 113, 0.55);
+        background: rgba(239, 68, 68, 0.12);
+      }
+      .veritas-x-text-origin--err {
+        border-color: rgba(161, 161, 170, 0.45);
+        background: rgba(63, 63, 70, 0.35);
+        color: #a1a1aa;
+        font-size: 11px;
+        font-weight: 600;
+        width: auto;
+        padding: 0 8px;
+      }
+      .veritas-x-text-origin svg {
+        display: block;
+      }
+      button.veritas-x-text-origin {
+        cursor: pointer;
+        font: inherit;
+        margin: 0;
+      }
+      button.veritas-x-text-origin:focus-visible {
+        outline: 2px solid rgba(96, 165, 250, 0.85);
+        outline-offset: 2px;
+      }
+
       .veritas-check-ai-panel {
         margin-top: 8px;
       }
@@ -1411,7 +1475,7 @@
 
   async function analyze(text) {
     const body = {
-      text,
+      text: String(text || "").slice(0, 5000),
       username: "",
       source: "extension",
     };
@@ -1577,6 +1641,78 @@
     return host;
   }
 
+  const X_TEXT_AI_THRESHOLD = 0.5;
+
+  function xTextOriginIconSvg(isAi) {
+    if (isAi) {
+      return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="#f87171" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
+    }
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none"><path stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M20 6L9 17l-5-5"/></svg>';
+  }
+
+  function mountXTextOriginRow(host) {
+    if (host.querySelector("[data-veritas-x-text-origin-row]")) return;
+    const row = document.createElement("div");
+    row.className = "veritas-x-text-origin-row";
+    row.setAttribute("data-veritas-x-text-origin-row", "1");
+    const inner = document.createElement("span");
+    inner.className = "veritas-x-text-origin veritas-x-text-origin--loading";
+    inner.setAttribute("aria-busy", "true");
+    inner.setAttribute("aria-label", "Analyzing post text for AI vs human style");
+    inner.title = "Analyzing text (AI vs human)…";
+    inner.textContent = "···";
+    row.appendChild(inner);
+    host.insertBefore(row, host.firstChild);
+  }
+
+  function setXTextOriginFromResult(host, result, scoreCard) {
+    const row = host.querySelector("[data-veritas-x-text-origin-row]");
+    if (!row || !scoreCard) return;
+    const p = Number(result?.aiGeneratedProbability);
+    const aiLikely = Number.isFinite(p) ? p >= X_TEXT_AI_THRESHOLD : false;
+    const expl = String(result?.explanation || "").trim();
+    const label = expl || (aiLikely ? "Likely AI-generated text" : "Likely human-written text");
+    if (!scoreCard.id) {
+      scoreCard.id = `vxsc_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+    }
+    row.innerHTML = "";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `veritas-x-text-origin ${aiLikely ? "veritas-x-text-origin--ai" : "veritas-x-text-origin--human"}`;
+    btn.title = `${label} — Click to show or hide Veritas scores`;
+    btn.setAttribute("aria-label", `${label}. Veritas scores hidden. Click to show.`);
+    btn.setAttribute("aria-expanded", "false");
+    btn.setAttribute("aria-controls", scoreCard.id);
+    btn.innerHTML = xTextOriginIconSvg(aiLikely);
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      scoreCard.classList.toggle("veritas-card--x-hidden");
+      const visible = !scoreCard.classList.contains("veritas-card--x-hidden");
+      btn.setAttribute("aria-expanded", visible ? "true" : "false");
+      btn.setAttribute(
+        "aria-label",
+        visible
+          ? `${label}. Veritas scores visible. Click to hide.`
+          : `${label}. Veritas scores hidden. Click to show.`
+      );
+    });
+    row.appendChild(btn);
+  }
+
+  function setXTextOriginError(host) {
+    const row = host.querySelector("[data-veritas-x-text-origin-row]");
+    if (!row) return;
+    row.innerHTML = "";
+    const span = document.createElement("span");
+    span.className = "veritas-x-text-origin veritas-x-text-origin--err";
+    span.setAttribute("role", "img");
+    span.title = "Could not analyze text";
+    span.setAttribute("aria-label", "Could not analyze text");
+    span.textContent = "—";
+    row.appendChild(span);
+  }
+
   async function processPost(el) {
     if (el.getAttribute(TAG_ATTR) === "1") return;
     el.setAttribute(TAG_ATTR, "1");
@@ -1589,11 +1725,19 @@
     const text = postTextFromElement(el);
     if (!text || text.length < 10) return;
 
+    if (isX) mountXTextOriginRow(host);
+
     try {
       const result = await analyze(text);
       const card = renderCard(result);
+      if (isX) {
+        card.classList.add("veritas-card--x-hidden");
+        card.setAttribute("data-veritas-x-score-card", "1");
+        setXTextOriginFromResult(host, result, card);
+      }
       host.appendChild(card);
     } catch {
+      if (isX) setXTextOriginError(host);
       /* backend down */
     }
   }

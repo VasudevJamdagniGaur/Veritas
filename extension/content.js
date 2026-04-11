@@ -1079,18 +1079,76 @@
 
   const isLikelyGenericAvatarLink = isLikelyInstagramAvatarLink;
 
-  function applyAccountBadgeTitles(badge, score, src, botPct) {
+  const VERIFIED_NEAR_SELECTORS = [
+    'svg[aria-label*="Verified" i]',
+    '[aria-label*="Verified account" i]',
+    '[aria-label*="Verified profile" i]',
+    '[data-testid="icon-verified"]',
+    '[data-testid*="verified" i]',
+    'span[title*="Verified" i]',
+  ].join(", ");
+
+  function hasVerifiedBadgeNearAnchor(anchor) {
+    if (!anchor || !anchor.isConnected) return false;
+    let node = anchor;
+    for (let d = 0; d < 14 && node; d++) {
+      try {
+        if (node.querySelector?.(VERIFIED_NEAR_SELECTORS)) return true;
+      } catch {
+        /* invalid selector in edge engines */
+      }
+      const lab = (node.getAttribute?.("aria-label") || node.getAttribute?.("title") || "").toLowerCase();
+      if (
+        lab.includes("verified account") ||
+        lab.includes("verified profile") ||
+        lab.includes("identity verified") ||
+        lab.includes("instagram verified")
+      ) {
+        return true;
+      }
+      node = node.parentElement;
+    }
+    for (let sib = anchor.nextElementSibling, i = 0; sib && i < 8; sib = sib.nextElementSibling, i++) {
+      try {
+        if (sib.matches?.("[aria-label*='Verified' i], [aria-label*='verified' i]")) return true;
+        if (sib.querySelector?.(VERIFIED_NEAR_SELECTORS)) return true;
+      } catch {
+        /* ignore */
+      }
+    }
+    for (let sib = anchor.previousElementSibling, i = 0; sib && i < 8; sib = sib.previousElementSibling, i++) {
+      try {
+        if (sib.matches?.("[aria-label*='Verified' i], [aria-label*='verified' i]")) return true;
+        if (sib.querySelector?.(VERIFIED_NEAR_SELECTORS)) return true;
+      } catch {
+        /* ignore */
+      }
+    }
+    return false;
+  }
+
+  /** Official blue check in the UI → +20 to displayed score, never above 100. */
+  function applyVerifiedAccountBonus(baseScore, anchor) {
+    const b = clamp(Math.round(Number(baseScore) || 0), 0, 100);
+    if (!hasVerifiedBadgeNearAnchor(anchor)) return { score: b, boosted: false };
+    return { score: clamp(b + 20, 0, 100), boosted: true };
+  }
+
+  function applyAccountBadgeTitles(badge, score, src, botPct, verifiedBoost) {
+    let suffix = verifiedBoost ? " · +20 verified account (max 100)" : "";
     if (src === "xgboost") {
       badge.title =
-        botPct != null
+        (botPct != null
           ? `Veritas · XGBoost: authenticity ${score}/100 · bot ~${botPct}% · start: cd veritas-backend && uvicorn model:app --reload`
-          : `Veritas · XGBoost: authenticity ${score}/100`;
+          : `Veritas · XGBoost: authenticity ${score}/100`) + suffix;
     } else if (src === "veritas-user") {
-      badge.title = `Veritas · Registered user: authenticity ${score}/100${botPct != null ? ` · botScore ~${botPct}%` : ""}`;
+      badge.title =
+        `Veritas · Registered user: authenticity ${score}/100${botPct != null ? ` · botScore ~${botPct}%` : ""}` + suffix;
     } else if (src === "offline" || src === "local") {
-      badge.title = `Veritas: ${score}/100 (offline estimate — run backend :5000 + FastAPI :8000 for live scores)`;
+      badge.title =
+        `Veritas: ${score}/100 (offline estimate — run backend :5000 + FastAPI :8000 for live scores)` + suffix;
     } else {
-      badge.title = `Veritas authenticity: ${score}/100 (${src})`;
+      badge.title = `Veritas authenticity: ${score}/100 (${src})` + suffix;
     }
   }
 
@@ -1118,7 +1176,8 @@
 
     fetchAccountScore(scoreKey)
       .then((data) => {
-        const score = clamp(Math.round(Number(data.realnessScore) || 0), 0, 100);
+        const raw = clamp(Math.round(Number(data.realnessScore) || 0), 0, 100);
+        const { score, boosted } = applyVerifiedAccountBonus(raw, anchor);
         const botPct =
           typeof data.bot_probability === "number"
             ? clamp(Math.round(data.bot_probability * 100), 0, 100)
@@ -1126,14 +1185,17 @@
         badge.textContent = String(score);
         badge.classList.remove("veritas-ig-realness--loading");
         applyRealnessClass(badge, score);
-        applyAccountBadgeTitles(badge, score, data.source || "api", botPct);
+        applyAccountBadgeTitles(badge, score, data.source || "api", botPct, boosted);
       })
       .catch(() => {
-        const score = localMockRealness(scoreKey);
+        const raw = localMockRealness(scoreKey);
+        const { score, boosted } = applyVerifiedAccountBonus(raw, anchor);
         badge.textContent = String(score);
         badge.classList.remove("veritas-ig-realness--loading");
         applyRealnessClass(badge, score);
-        badge.title = `Veritas: ${score}/100 (fallback)`;
+        badge.title = boosted
+          ? `Veritas: ${score}/100 (fallback) · +20 verified account (max 100)`
+          : `Veritas: ${score}/100 (fallback)`;
       });
   }
 

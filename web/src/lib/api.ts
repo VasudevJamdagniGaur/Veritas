@@ -48,6 +48,8 @@ api.interceptors.response.use(
 export type User = {
   _id: string;
   username: string;
+  /** 24-char Veritas Wallet ID (letters, digits, symbols), set at signup */
+  walletId?: string;
   walletAddress?: string;
   trustScore: number;
   botScore: number;

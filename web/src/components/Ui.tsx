@@ -199,12 +199,15 @@ export function CameraGlyph({ className = "h-4 w-4" }: { className?: string }) {
 export function ProfileMenu({
   username,
   avatarSrc,
+  walletId,
   subtextWhenEmpty = "Capture & Verify to save your photo here",
   subtextWhenPhoto = "Verification capture",
   footer,
 }: {
   username: string;
   avatarSrc: string;
+  /** Veritas Wallet ID shown in profile after signup */
+  walletId?: string;
   subtextWhenEmpty?: string;
   subtextWhenPhoto?: string;
   footer?: (close: () => void) => React.ReactNode;
@@ -268,6 +271,21 @@ export function ProfileMenu({
             </div>
             <div className="mt-3 text-sm font-semibold text-white">{username}</div>
             <p className="mt-1 text-xs text-gray-400">{hasPhoto ? subtextWhenPhoto : subtextWhenEmpty}</p>
+            {walletId ? (
+              <div className="mt-3 w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-left">
+                <div className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Veritas Wallet ID</div>
+                <div className="mt-1 break-all font-mono text-[11px] leading-snug text-pink-100">{walletId}</div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(walletId);
+                  }}
+                  className="mt-2 text-[11px] font-medium text-[#E91E63] hover:underline"
+                >
+                  Copy
+                </button>
+              </div>
+            ) : null}
           </div>
           {footer ? (
             <div className="mt-4 border-t border-white/10 pt-3">{footer(() => setOpen(false))}</div>

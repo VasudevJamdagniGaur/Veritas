@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { generateWalletId, ensureWalletId } = require("./walletId");
 
 const state = {
   usersById: new Map(),
@@ -27,11 +28,15 @@ function getOrCreateUser({ username }) {
   if (!u || u.length < 2) throw new Error("Invalid username");
 
   const existing = state.usersByUsername.get(u);
-  if (existing) return existing;
+  if (existing) {
+    if (ensureWalletId(existing)) updateUser(existing);
+    return existing;
+  }
 
   const user = {
     _id: makeId(),
     username: u,
+    walletId: generateWalletId(),
     walletAddress: "",
     trustScore: 50,
     botScore: 70,

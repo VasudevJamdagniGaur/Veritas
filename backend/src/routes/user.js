@@ -5,6 +5,15 @@ const { calculateBotScore, clamp } = require("../lib/scoring");
 const { maybeWriteVerification } = require("../lib/chain");
 const { isDbReady } = require("../lib/db");
 const { memoryStore } = require("../lib/memoryStore");
+const { ensureWalletId } = require("../lib/walletId");
+
+function persistWalletIdMemory(user) {
+  if (ensureWalletId(user)) memoryStore.updateUser(user);
+}
+
+async function persistWalletIdMongo(user) {
+  if (ensureWalletId(user)) await user.save();
+}
 
 const router = express.Router();
 
@@ -22,6 +31,7 @@ router.post("/verify-face", async (req, res) => {
   if (!isDbReady()) {
     const user = memoryStore.findUserById(userId);
     if (!user) return res.status(404).json({ error: "User not found" });
+    persistWalletIdMemory(user);
     user.isHumanVerified = true;
     user.faceCaptureDataUrl = captureDataUrl;
     user.trustScore = clamp((user.trustScore ?? 50) + 15, 0, 100);
@@ -32,6 +42,8 @@ router.post("/verify-face", async (req, res) => {
 
   const user = await User.findById(userId);
   if (!user) return res.status(404).json({ error: "User not found" });
+
+  await persistWalletIdMongo(user);
 
   user.isHumanVerified = true;
   user.faceCaptureDataUrl = captureDataUrl;
@@ -103,6 +115,7 @@ router.post("/link-social", async (req, res) => {
   if (!isDbReady()) {
     const user = memoryStore.findUserById(userId);
     if (!user) return res.status(404).json({ error: "User not found" });
+    persistWalletIdMemory(user);
     applyLinks(user);
     memoryStore.updateUser(user);
     return res.json({ user, db: "memory" });
@@ -110,6 +123,8 @@ router.post("/link-social", async (req, res) => {
 
   const user = await User.findById(userId);
   if (!user) return res.status(404).json({ error: "User not found" });
+
+  await persistWalletIdMongo(user);
 
   applyLinks(user);
   await user.save();
@@ -136,6 +151,7 @@ router.post("/set-username", async (req, res) => {
       const code = out.error === "Username already taken" ? 409 : out.error === "User not found" ? 404 : 400;
       return res.status(code).json({ error: out.error, db: "memory" });
     }
+    persistWalletIdMemory(out.user);
     return res.json({ user: out.user, db: "memory" });
   }
 
@@ -149,6 +165,7 @@ router.post("/set-username", async (req, res) => {
 
   user.username = clean;
   await user.save();
+  await persistWalletIdMongo(user);
   return res.json({ user });
 });
 
@@ -156,11 +173,13 @@ router.get("/:id", async (req, res) => {
   if (!isDbReady()) {
     const user = memoryStore.findUserById(req.params.id);
     if (!user) return res.status(404).json({ error: "User not found" });
+    persistWalletIdMemory(user);
     return res.json({ user, db: "memory" });
   }
 
   const user = await User.findById(req.params.id);
   if (!user) return res.status(404).json({ error: "User not found" });
+  await persistWalletIdMongo(user);
   return res.json({ user });
 });
 

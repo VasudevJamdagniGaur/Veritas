@@ -7,6 +7,7 @@ const { connectDb } = require("./lib/db");
 const User = require("./models/User");
 const Post = require("./models/Post");
 const { calculateFinalScore, calculateBotScore, clamp } = require("./lib/scoring");
+const { generateWalletId } = require("./lib/walletId");
 const { analyzeText } = require("./lib/openai");
 
 async function seed() {
@@ -17,6 +18,7 @@ async function seed() {
 
   const user1 = await User.create({
     username: "suspicious_newbie",
+    walletId: generateWalletId(),
     trustScore: 35,
     botScore: 85,
     isHumanVerified: false,
@@ -25,6 +27,7 @@ async function seed() {
 
   const user2 = await User.create({
     username: "verified_human",
+    walletId: generateWalletId(),
     trustScore: 78,
     botScore: 20,
     isHumanVerified: true,

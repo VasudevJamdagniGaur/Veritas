@@ -87,6 +87,7 @@ export default function SocialLinkPage() {
         <ProfileMenu
           username={user?.username || "Not logged in"}
           avatarSrc={avatarSrc}
+          walletId={user?.walletId}
           subtextWhenEmpty="No verification photo on file"
           subtextWhenPhoto="Verification capture"
           footer={(close) => (

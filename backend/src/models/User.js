@@ -3,6 +3,8 @@ const mongoose = require("mongoose");
 const UserSchema = new mongoose.Schema(
   {
     username: { type: String, required: true, unique: true, index: true },
+    /** Veritas Wallet ID: 24-char alphanumeric + symbols, assigned at signup */
+    walletId: { type: String, unique: true, sparse: true },
     walletAddress: { type: String, default: "", index: true },
     trustScore: { type: Number, default: 50, min: 0, max: 100 },
     botScore: { type: Number, default: 50, min: 0, max: 100 },

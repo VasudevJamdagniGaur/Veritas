@@ -290,6 +290,7 @@ export default function Dashboard() {
           <ProfileMenu
             username={viewUser.username}
             avatarSrc={user?.faceCaptureDataUrl || ""}
+            walletId={user?.walletId}
             subtextWhenEmpty="No verification photo on file"
             subtextWhenPhoto="Verification capture"
             footer={(close) => (

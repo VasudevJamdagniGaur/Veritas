@@ -2,6 +2,7 @@ const express = require("express");
 const { z } = require("zod");
 const User = require("../models/User");
 const { calculateBotScore, clamp } = require("../lib/scoring");
+const { generateWalletId, ensureWalletId } = require("../lib/walletId");
 const { isDbReady } = require("../lib/db");
 const { memoryStore } = require("../lib/memoryStore");
 
@@ -30,6 +31,7 @@ router.post("/login", async (req, res) => {
   if (!isDbReady() && memoryStore) {
     try {
       const user = memoryStore.getOrCreateUser({ username });
+      if (ensureWalletId(user)) memoryStore.updateUser(user);
       if (walletAddress && !user.walletAddress) user.walletAddress = walletAddress;
       user.botScore = clamp(calculateBotScore(user), 0, 100);
       memoryStore.updateUser(user);
@@ -44,12 +46,14 @@ router.post("/login", async (req, res) => {
     user = await User.create({
       username,
       walletAddress,
+      walletId: generateWalletId(),
       trustScore: 50,
       botScore: 70, // new accounts start more suspicious for demo impact
       isHumanVerified: false,
     });
-  } else if (walletAddress && !user.walletAddress) {
-    user.walletAddress = walletAddress;
+  } else {
+    if (walletAddress && !user.walletAddress) user.walletAddress = walletAddress;
+    if (ensureWalletId(user)) await user.save();
   }
 
   user.botScore = clamp(calculateBotScore(user), 0, 100);
@@ -100,6 +104,7 @@ router.post("/google", async (req, res) => {
 
   if (!isDbReady()) {
     const user = memoryStore.getOrCreateUser({ username: derivedUsername });
+    if (ensureWalletId(user)) memoryStore.updateUser(user);
     user.botScore = clamp(calculateBotScore(user), 0, 100);
     memoryStore.updateUser(user);
     return res.json({ user, provider: "google", username: derivedUsername, db: "memory" });
@@ -109,10 +114,13 @@ router.post("/google", async (req, res) => {
   if (!user) {
     user = await User.create({
       username: derivedUsername,
+      walletId: generateWalletId(),
       trustScore: 55,
       botScore: 55,
       isHumanVerified: false,
     });
+  } else if (ensureWalletId(user)) {
+    await user.save();
   }
 
   user.botScore = clamp(calculateBotScore(user), 0, 100);

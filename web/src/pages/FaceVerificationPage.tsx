@@ -175,6 +175,7 @@ export default function FaceVerificationPage() {
         <ProfileMenu
           username={user?.username || "Not logged in"}
           avatarSrc={avatarSrc}
+          walletId={user?.walletId}
           footer={(close) => (
             <>
               <button

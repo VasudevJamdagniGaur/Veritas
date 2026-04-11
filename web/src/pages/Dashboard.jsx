@@ -1,6 +1,8 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { api } from "../lib/api";
 import { deleteVeritasAccount } from "../lib/deleteAccount";
+import { parsePastedSocialLink } from "../lib/parseSocialProfileUrl";
 import { useApp } from "../state/appState";
 import { ProfileMenu, Shell } from "../components/Ui";
 
@@ -120,29 +122,88 @@ export function ExtensionCard({ onInstall }) {
   );
 }
 
-function SocialAccountRow({ label, connected, detail }) {
+function SocialConnectRow({ platformKey, label, connected, detail, userId, onLinked }) {
+  const [open, setOpen] = useState(false);
+  const [input, setInput] = useState("");
+  const [err, setErr] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const linkAccount = async () => {
+    setErr("");
+    if (!userId) {
+      setErr("Sign in to connect.");
+      return;
+    }
+    const parsed = parsePastedSocialLink(platformKey, input);
+    if (parsed && "error" in parsed) {
+      setErr(parsed.error);
+      return;
+    }
+    if (!parsed || "error" in parsed) return;
+    setSaving(true);
+    try {
+      const resp = await api.post("/user/link-social", {
+        userId,
+        ...parsed,
+      });
+      onLinked(resp.data.user);
+      setInput("");
+      setOpen(false);
+    } catch (e) {
+      const msg = e?.response?.data?.error || e?.message || "Could not save.";
+      setErr(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-sm text-gray-200">{label}</div>
-        <Pill
-          className={
-            connected
-              ? "bg-emerald-500/15 text-emerald-200 border-emerald-400/30"
-              : "bg-white/5 text-gray-200 border-white/10"
-          }
-        >
-          {connected ? "Connected" : "Not Connected"}
-        </Pill>
+        {connected ? (
+          <Pill className="border bg-emerald-500/15 text-emerald-200 border-emerald-400/30">Connected</Pill>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              setOpen((o) => !o);
+              setErr("");
+            }}
+            className="rounded-full border border-[#E91E63]/40 bg-[#E91E63]/15 px-3 py-1 text-xs font-semibold text-pink-100 transition hover:bg-[#E91E63]/25"
+          >
+            {open ? "Cancel" : "Connect"}
+          </button>
+        )}
       </div>
       <div className="mt-2 break-words text-sm text-gray-300">
-        {connected ? detail : "Connect your handle from settings."}
+        {connected ? detail : open ? null : "Click Connect, then paste your profile link."}
       </div>
+      {!connected && open ? (
+        <div className="mt-3 space-y-2">
+          <input
+            type="url"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Paste profile URL (https://…)"
+            className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-[#E91E63]/50"
+          />
+          {err ? <div className="text-xs text-rose-300">{err}</div> : null}
+          <button
+            type="button"
+            disabled={saving || !input.trim()}
+            onClick={linkAccount}
+            className="w-full rounded-xl bg-[#E91E63] px-3 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Link account"}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-export function AccountCard({ user }) {
+export function AccountCard({ user, userId, onLinked }) {
   const redditRaw = user.redditUsername || "";
   const igRaw = user.instagramHandle || "";
   const linkedinRaw = user.linkedinUrl || "";
@@ -204,7 +265,15 @@ export function AccountCard({ user }) {
 
       <div className="mt-4 grid gap-3">
         {rows.map((row) => (
-          <SocialAccountRow key={row.key} label={row.label} connected={row.connected} detail={row.detail} />
+          <SocialConnectRow
+            key={row.key}
+            platformKey={row.key}
+            label={row.label}
+            connected={row.connected}
+            detail={row.detail}
+            userId={userId}
+            onLinked={onLinked}
+          />
         ))}
       </div>
     </Card>
@@ -213,7 +282,7 @@ export function AccountCard({ user }) {
 
 export default function Dashboard() {
   const nav = useNavigate();
-  const { user, logout, refreshUser } = useApp();
+  const { user, setUser, logout, refreshUser } = useApp();
 
   const mockUser = useMemo(
     () => ({
@@ -292,7 +361,7 @@ export default function Dashboard() {
       <div className="grid gap-5 lg:grid-cols-3">
         <TrustCard user={viewUser} />
         <ExtensionCard onInstall={() => { console.log("Install extension clicked"); nav("/instructions"); }} />
-        <AccountCard user={viewUser} />
+        <AccountCard user={viewUser} userId={user?._id} onLinked={setUser} />
       </div>
     </Shell>
   );

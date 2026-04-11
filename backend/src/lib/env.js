@@ -3,10 +3,12 @@ const { z } = require("zod");
 const EnvSchema = z.object({
   PORT: z.coerce.number().default(5000),
   MONGODB_URI: z.string().min(1),
-  /** OpenAI API key for text + reel vision (keep in .env only; never commit). */
+  /** OpenAI API key for POST /api/analyze (keep in .env only; never commit). */
   OPENAI_API_KEY: z.string().optional().default(""),
-  /** Use a vision-capable model for reel frames (e.g. gpt-4o-mini, gpt-4o). */
+  /** Chat model for text analysis (e.g. gpt-4o-mini). */
   OPENAI_MODEL: z.string().optional().default("gpt-4o-mini"),
+  /** Vision model for POST /api/check-ai (must accept image input, e.g. gpt-4o-mini). */
+  OPENAI_VISION_MODEL: z.string().optional().default("gpt-4o-mini"),
   JWT_SECRET: z.string().min(1).default("dev-secret-change-me"),
   CHAIN_ENABLED: z
     .string()

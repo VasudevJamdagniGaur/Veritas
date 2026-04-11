@@ -46,7 +46,7 @@
   function formatExtensionMessagingError(raw) {
     const m = String(raw?.message != null ? raw.message : raw || "");
     if (/context invalidated/i.test(m)) {
-      return "This tab is still on an old Veritas session (extension was reloaded or updated). Refresh the page (F5), then tap Veritas AI again.";
+      return "This tab is still on an old Veritas session (extension was reloaded or updated). Refresh the page (F5).";
     }
     if (/receiving end does not exist|could not establish connection/i.test(m)) {
       return "Veritas background is not reachable. Refresh the page (F5), or reload the extension on chrome://extensions and then refresh this tab.";
@@ -55,7 +55,7 @@
   }
 
   /**
-   * Single path for background `sendMessage` (used by text analyze + reel vision).
+   * Single path for background `sendMessage` (text analyze + social score).
    * @returns {Promise<object|null>} response object, or `null` if no extension runtime (caller may fall back to fetch).
    */
   function sendMessageToExtension(message) {
@@ -76,11 +76,6 @@
       }
     });
   }
-
-  /** Single floating host for “check AI” on Instagram Reels (syncs to the primary visible video). */
-  let reelAiHostEl = null;
-  let reelAiBoundVideo = null;
-  let reelAiPanelEl = null;
 
   const IG_RESERVED = new Set([
     "p",
@@ -139,6 +134,119 @@
       .veritas-insight b { color: #FBCFE8; }
       .veritas-warn { color: #FCA5A5; }
       .veritas-ok { color: #86EFAC; }
+
+      /* Check AI (vision) toolbar + result */
+      .veritas-post-toolbar {
+        margin-top: 8px;
+        clear: both;
+      }
+      .veritas-check-ai-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .veritas-check-ai-btn {
+        appearance: none;
+        border: 1px solid rgba(233, 30, 99, 0.45);
+        background: linear-gradient(180deg, rgba(233, 30, 99, 0.25), rgba(233, 30, 99, 0.12));
+        color: #fce7f3;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 6px 12px;
+        border-radius: 999px;
+        cursor: pointer;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      }
+      .veritas-check-ai-btn:hover:not(:disabled) {
+        background: rgba(233, 30, 99, 0.35);
+      }
+      .veritas-check-ai-btn:disabled {
+        opacity: 0.55;
+        cursor: wait;
+      }
+      .veritas-check-ai-panel {
+        margin-top: 8px;
+      }
+      .veritas-check-ai-card {
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(12, 12, 14, 0.95);
+        border-radius: 12px;
+        padding: 10px 12px;
+        font-size: 12px;
+        line-height: 1.4;
+        color: #e5e7eb;
+        max-width: 100%;
+        box-sizing: border-box;
+      }
+      .veritas-check-ai-card--loading {
+        color: #d1d5db;
+        font-style: italic;
+      }
+      .veritas-check-ai-card--err {
+        color: #fecaca;
+        border-color: rgba(248, 113, 113, 0.45);
+      }
+      .veritas-check-ai-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+      .veritas-check-ai-title {
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        color: #fbcfe8;
+        font-size: 11px;
+        text-transform: uppercase;
+      }
+      .veritas-check-ai-verdict {
+        font-weight: 800;
+        font-size: 13px;
+        padding: 2px 10px;
+        border-radius: 999px;
+      }
+      .veritas-check-ai-verdict--real {
+        background: rgba(34, 197, 94, 0.2);
+        color: #bbf7d0;
+        border: 1px solid rgba(34, 197, 94, 0.45);
+      }
+      .veritas-check-ai-verdict--ai {
+        background: rgba(244, 63, 94, 0.18);
+        color: #fecdd3;
+        border: 1px solid rgba(244, 63, 94, 0.5);
+      }
+      .veritas-check-ai-meter {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        font-size: 11px;
+        color: #9ca3af;
+        margin-bottom: 4px;
+      }
+      .veritas-check-ai-meter strong {
+        color: #f9fafb;
+        font-size: 18px;
+      }
+      .veritas-check-ai-bar {
+        height: 6px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+        margin-bottom: 8px;
+      }
+      .veritas-check-ai-bar > span {
+        display: block;
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #f472b6, #e11d48);
+      }
+      .veritas-check-ai-expl {
+        margin: 0;
+        color: #d1d5db;
+        font-size: 12px;
+      }
 
       /* Account authenticity pill (Instagram, X, LinkedIn, Reddit, …) */
       .veritas-ig-realness {
@@ -253,89 +361,6 @@
         background: #b91c1c !important;
         border: 1px solid #fca5a5 !important;
         color: #ffffff !important;
-      }
-
-      /* Instagram Reel: Veritas AI check (top-right over video) */
-      .veritas-reel-ai-host {
-        position: fixed;
-        pointer-events: none;
-        z-index: 2147483647;
-        box-sizing: border-box;
-      }
-      .veritas-reel-ai-btn {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        pointer-events: auto;
-        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-        font-size: 11px;
-        font-weight: 700;
-        padding: 7px 12px;
-        border-radius: 999px;
-        border: 1px solid rgba(236, 72, 153, 0.55);
-        background: rgba(0, 0, 0, 0.5);
-        color: #fbcfe8;
-        cursor: pointer;
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
-      }
-      .veritas-reel-ai-btn:hover:not(:disabled) {
-        background: rgba(236, 72, 153, 0.28);
-        color: #fff;
-      }
-      .veritas-reel-ai-btn:disabled {
-        opacity: 0.7;
-        cursor: wait;
-      }
-      .veritas-reel-ai-panel {
-        position: absolute;
-        left: 8px;
-        right: 8px;
-        bottom: 52px;
-        max-height: 42vh;
-        overflow: auto;
-        pointer-events: auto;
-        border-radius: 14px;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        background: rgba(10, 10, 10, 0.94);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
-      }
-      .veritas-reel-ai-panel .veritas-card {
-        margin-top: 0;
-        border: none;
-        border-radius: 14px;
-      }
-      .veritas-reel-ai-error {
-        position: absolute;
-        left: 8px;
-        right: 8px;
-        bottom: 52px;
-        pointer-events: auto;
-        padding: 10px 12px;
-        border-radius: 12px;
-        font-size: 12px;
-        line-height: 1.4;
-        white-space: pre-wrap;
-        word-break: break-word;
-        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-        color: #fecaca;
-        background: rgba(127, 29, 29, 0.85);
-        border: 1px solid rgba(252, 165, 165, 0.4);
-      }
-      .veritas-reel-ai-reload {
-        margin-top: 10px;
-        padding: 6px 12px;
-        border-radius: 8px;
-        font-size: 12px;
-        font-weight: 600;
-        cursor: pointer;
-        border: 1px solid rgba(252, 165, 165, 0.6);
-        background: rgba(254, 226, 226, 0.15);
-        color: #fff;
-      }
-      .veritas-reel-ai-reload:hover {
-        background: rgba(254, 226, 226, 0.28);
       }
     `;
     document.documentElement.appendChild(style);
@@ -682,7 +707,6 @@
       a.setAttribute(IG_TAG, "1");
       attachAccountScoreBadge(a, handle, isInstagramReelSurface());
     }
-    updateInstagramReelAiOverlay();
   }
 
   function scanXAccountBadges() {
@@ -776,11 +800,164 @@
     return generic.trim();
   }
 
+  function pickLargestVisibleImage(root) {
+    const imgs = Array.from(root.querySelectorAll("img"));
+    let best = null;
+    let bestArea = 0;
+    for (const img of imgs) {
+      const r = img.getBoundingClientRect();
+      const a = r.width * r.height;
+      if (a < 48 * 48) continue;
+      if (r.bottom < -80 || r.top > window.innerHeight + 80) continue;
+      if (a > bestArea) {
+        bestArea = a;
+        best = img;
+      }
+    }
+    return best;
+  }
+
+  function tryCaptureVideoFrame(root) {
+    const videos = Array.from(root.querySelectorAll("video"));
+    for (const v of videos) {
+      const r = v.getBoundingClientRect();
+      if (r.width * r.height < 64 * 64) continue;
+      try {
+        const vw = v.videoWidth;
+        const vh = v.videoHeight;
+        if (!vw || !vh) continue;
+        const maxS = 1280;
+        const scale = Math.min(1, maxS / Math.max(vw, vh));
+        const tw = Math.max(1, Math.round(vw * scale));
+        const th = Math.max(1, Math.round(vh * scale));
+        const c = document.createElement("canvas");
+        c.width = tw;
+        c.height = th;
+        const ctx = c.getContext("2d");
+        ctx.drawImage(v, 0, 0, tw, th);
+        const dataUrl = c.toDataURL("image/jpeg", 0.88);
+        if (dataUrl && dataUrl.length > 400) return { imageBase64: dataUrl };
+      } catch {
+        /* CORS-tainted canvas or not ready */
+      }
+    }
+    return null;
+  }
+
+  function tryCaptureImageDataUrl(img) {
+    try {
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
+      if (!w || !h) return null;
+      const maxS = 1280;
+      const scale = Math.min(1, maxS / Math.max(w, h));
+      const tw = Math.max(1, Math.round(w * scale));
+      const th = Math.max(1, Math.round(h * scale));
+      const c = document.createElement("canvas");
+      c.width = tw;
+      c.height = th;
+      const ctx = c.getContext("2d");
+      ctx.drawImage(img, 0, 0, tw, th);
+      return c.toDataURL("image/jpeg", 0.88);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Prefer a video frame; else largest visible image (canvas or URL for background fetch).
+   * @returns {{ imageBase64?: string, imageUrl?: string } | null}
+   */
+  function captureMediaForCheckAi(root) {
+    const v = tryCaptureVideoFrame(root);
+    if (v) return v;
+    const img = pickLargestVisibleImage(root);
+    if (!img) return null;
+    const dataUrl = tryCaptureImageDataUrl(img);
+    if (dataUrl) return { imageBase64: dataUrl };
+    const url = img.currentSrc || img.getAttribute("src") || "";
+    if (url && !url.startsWith("blob:") && /^https?:\/\//i.test(url)) return { imageUrl: url };
+    return null;
+  }
+
+  function mountCheckAiPanel(host) {
+    let panel = host.querySelector(".veritas-check-ai-panel");
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.className = "veritas-check-ai-panel";
+      host.appendChild(panel);
+    }
+    return panel;
+  }
+
+  function renderCheckAiResult(panel, { aiProbability, verdict, explanation }) {
+    const pct = clamp(Math.round(Number(aiProbability)), 0, 100);
+    const isAi = verdict === "AI-generated";
+    panel.innerHTML = "";
+    const card = document.createElement("div");
+    card.className = "veritas-check-ai-card";
+    const head = document.createElement("div");
+    head.className = "veritas-check-ai-head";
+    const title = document.createElement("span");
+    title.className = "veritas-check-ai-title";
+    title.textContent = "Check AI";
+    const ver = document.createElement("span");
+    ver.className = `veritas-check-ai-verdict ${isAi ? "veritas-check-ai-verdict--ai" : "veritas-check-ai-verdict--real"}`;
+    ver.textContent = verdict;
+    head.appendChild(title);
+    head.appendChild(ver);
+
+    const meter = document.createElement("div");
+    meter.className = "veritas-check-ai-meter";
+    meter.innerHTML = `<span>AI probability</span><strong>${pct}%</strong>`;
+
+    const barWrap = document.createElement("div");
+    barWrap.className = "veritas-check-ai-bar";
+    const bar = document.createElement("span");
+    bar.style.width = `${pct}%`;
+    barWrap.appendChild(bar);
+
+    const expl = document.createElement("p");
+    expl.className = "veritas-check-ai-expl";
+    expl.textContent = String(explanation || "");
+
+    card.appendChild(head);
+    card.appendChild(meter);
+    card.appendChild(barWrap);
+    card.appendChild(expl);
+    panel.appendChild(card);
+  }
+
+  async function checkAiAnalyze(payload) {
+    if (!payload) {
+      throw new Error("No capturable image or video in this post.");
+    }
+    const bg = await sendMessageToExtension({ type: "VERITAS_CHECK_AI", ...payload });
+    if (bg && bg.ok === true && bg.data) return bg.data;
+    if (bg && bg.ok === false) {
+      throw new Error(formatExtensionMessagingError(bg?.error || "Check AI failed"));
+    }
+    if (payload.imageBase64) {
+      const resp = await fetch(`${API_BASE}/check-ai`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: payload.imageBase64 }),
+      });
+      if (!resp.ok) throw new Error(`Check AI failed: ${resp.status}`);
+      return resp.json();
+    }
+    throw new Error("Could not load image (extension background unreachable). Refresh the page and try again.");
+  }
+
   function findCandidatePosts() {
-    const articles = Array.from(document.querySelectorAll("article"));
-    const roleArticles = Array.from(document.querySelectorAll('[role="article"]'));
-    const set = new Set([...articles, ...roleArticles]);
-    return Array.from(set).filter((el) => el && el.nodeType === 1);
+    const set = new Set();
+    for (const sel of ["article", '[role="article"]']) {
+      document.querySelectorAll(sel).forEach((node) => {
+        if (node && node.nodeType === 1) set.add(node);
+      });
+    }
+    const all = Array.from(set);
+    return all.filter((el) => !all.some((other) => other !== el && other.contains(el)));
   }
 
   async function analyze(text) {
@@ -806,79 +983,13 @@
     return resp.json();
   }
 
-  /**
-   * Reel / video: vision model over frame(s). Instagram video is cross-origin → canvas is tainted;
-   * background falls back to captureVisibleTab when images[] is empty.
-   */
-  async function analyzeReelVisual(text, images) {
-    const bg = await sendMessageToExtension({
-      type: "VERITAS_ANALYZE_REEL",
-      text,
-      images: Array.isArray(images) ? images : [],
-      source: "extension",
-    });
-    if (!bg) {
-      throw new Error(
-        "Extension messaging unavailable here. Reload the page, update the Veritas extension, or use instagram.com in Chrome/Edge with the extension enabled (not an in-app browser)."
-      );
-    }
-    if (bg.ok === true && bg.data) return bg.data;
-    throw new Error(formatExtensionMessagingError(bg?.error || "Reel visual analyze failed"));
-  }
-
-  /** @returns {string | null} data URL or null if cross-origin / not ready */
-  function tryCaptureVideoFrameDataUrl(video) {
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
-    if (!vw || !vh) return null;
-    const canvas = document.createElement("canvas");
-    const maxSide = 768;
-    let cw = vw;
-    let ch = vh;
-    if (Math.max(vw, vh) > maxSide) {
-      const s = maxSide / Math.max(vw, vh);
-      cw = Math.round(vw * s);
-      ch = Math.round(vh * s);
-    }
-    canvas.width = cw;
-    canvas.height = ch;
-    const ctx = canvas.getContext("2d");
-    try {
-      ctx.drawImage(video, 0, 0, cw, ch);
-      return canvas.toDataURL("image/jpeg", 0.82);
-    } catch {
-      return null;
-    }
-  }
-
-  function renderCard({ finalScore, aiGeneratedProbability, explanation, analysisSource, visualProvider }) {
+  function renderCard({ finalScore, aiGeneratedProbability, explanation }) {
     const score = clamp(Math.round(finalScore), 0, 100);
     const aiProbPct = clamp(Math.round(Number(aiGeneratedProbability) * 100), 0, 100);
     const t = tone(score);
-    const isVisual = analysisSource === "visual";
 
     const card = document.createElement("div");
     card.className = "veritas-card";
-
-    if (isVisual) {
-      const note = document.createElement("div");
-      note.className = "veritas-insight";
-      note.style.fontSize = "11px";
-      note.style.opacity = "0.92";
-      note.style.marginBottom = "8px";
-      const via =
-        visualProvider === "openai"
-          ? "Veritas (OpenAI vision)"
-          : visualProvider === "mock"
-            ? "mock (no API key)"
-            : visualProvider
-              ? escapeHtml(String(visualProvider))
-              : "";
-      note.innerHTML =
-        "<b>Visual check:</b> From frame(s) of what’s on screen (Instagram blocks direct pixel read on their CDN, so we use a capture of the visible reel when needed). Plus caption/context. Not forensic proof." +
-        (via ? ` <span style="opacity:0.85">· ${via}</span>` : "");
-      card.appendChild(note);
-    }
 
     const row = document.createElement("div");
     row.className = "veritas-row";
@@ -910,11 +1021,8 @@
 
     const aiFlag = document.createElement("div");
     aiFlag.className = "veritas-insight";
-    aiFlag.innerHTML = isVisual
-      ? aiProbPct >= 60
-        ? `<span class="veritas-warn">⚠ On-screen visuals lean synthetic / AI-generated</span>`
-        : `<span class="veritas-ok">On-screen visuals look more like real footage</span>`
-      : aiProbPct >= 60
+    aiFlag.innerHTML =
+      aiProbPct >= 60
         ? `<span class="veritas-warn">⚠ Possibly AI-generated</span>`
         : `<span class="veritas-ok">Likely human-authored</span>`;
 
@@ -933,189 +1041,47 @@
       .replaceAll("'", "&#039;");
   }
 
-  function primaryInstagramReelVideo() {
-    let best = null;
-    let bestInter = 0;
-    for (const v of document.querySelectorAll("video")) {
-      const r = v.getBoundingClientRect();
-      if (r.width < 100 || r.height < 100) continue;
-      const iw = Math.max(0, Math.min(r.right, window.innerWidth) - Math.max(r.left, 0));
-      const ih = Math.max(0, Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0));
-      const inter = iw * ih;
-      if (inter > bestInter) {
-        bestInter = inter;
-        best = v;
-      }
+  function ensurePostToolbarHost(el) {
+    let host = el.querySelector("[data-veritas-post-host]");
+    if (!host) {
+      host = document.createElement("div");
+      host.setAttribute("data-veritas-post-host", "1");
+      host.className = "veritas-post-toolbar";
+      el.appendChild(host);
     }
-    return bestInter > 8000 ? best : null;
-  }
-
-  function reelCaptionContext(video) {
-    const article = video.closest("article");
-    if (article) {
-      const t = postTextFromElement(article);
-      if (t && t.length > 8) return t.slice(0, 4500);
-    }
-    let el = video.parentElement;
-    for (let i = 0; i < 14 && el; i++) {
-      const t = (el.innerText || "").trim();
-      if (t.length > 24) return t.slice(0, 4500);
-      el = el.parentElement;
-    }
-    return "";
-  }
-
-  function buildReelAnalyzeText(video) {
-    const caption = reelCaptionContext(video);
-    const header =
-      "CONTENT: Instagram Reel (short-form video). The model cannot see pixels; use caption, hashtags, and any visible UI text below.\n" +
-      "TASK: Estimate whether this content is likely AI-generated or synthetic (e.g. deepfake, full AI video, or heavily AI-altered) versus authentic human-recorded footage.\n\n" +
-      "CAPTION / ON-PAGE TEXT:\n";
-    const body =
-      caption ||
-      "(No caption extracted from the page — give a cautious generic assessment for short-form vertical video.)";
-    return `${header}${body}`;
-  }
-
-  function clearReelAiPanel() {
-    if (!reelAiHostEl) return;
-    reelAiHostEl.querySelectorAll(".veritas-reel-ai-panel, .veritas-reel-ai-error").forEach((n) => n.remove());
-    reelAiPanelEl = null;
-  }
-
-  function removeInstagramReelAiOverlay() {
-    if (reelAiHostEl) {
-      try {
-        reelAiHostEl.__veritas_ro?.disconnect();
-      } catch {
-        /* ignore */
-      }
-      const onSync = reelAiHostEl.__veritas_onSync;
-      if (typeof onSync === "function") {
-        window.removeEventListener("scroll", onSync, true);
-        window.removeEventListener("resize", onSync);
-      }
-      reelAiHostEl.remove();
-      reelAiHostEl = null;
-    }
-    reelAiBoundVideo = null;
-    reelAiPanelEl = null;
-  }
-
-  function syncReelAiHostRect(video) {
-    if (!reelAiHostEl || !video || !video.isConnected) return;
-    const r = video.getBoundingClientRect();
-    if (r.width < 80 || r.height < 80) {
-      reelAiHostEl.style.display = "none";
-      return;
-    }
-    reelAiHostEl.style.display = "";
-    reelAiHostEl.style.left = `${r.left}px`;
-    reelAiHostEl.style.top = `${r.top}px`;
-    reelAiHostEl.style.width = `${r.width}px`;
-    reelAiHostEl.style.height = `${r.height}px`;
-  }
-
-  function updateInstagramReelAiOverlay() {
-    if (!isInstagram || !isInstagramReelSurface()) {
-      removeInstagramReelAiOverlay();
-      return;
-    }
-    const video = primaryInstagramReelVideo();
-    if (!video) {
-      removeInstagramReelAiOverlay();
-      return;
-    }
-
-    if (!reelAiHostEl) {
-      reelAiHostEl = document.createElement("div");
-      reelAiHostEl.className = "veritas-reel-ai-host";
-      reelAiHostEl.setAttribute("data-veritas-reel-ai-host", "1");
-
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "veritas-reel-ai-btn";
-      btn.textContent = "Veritas AI";
-      btn.title =
-        "Visual + caption via backend: Gemini API key (easiest), or Vertex ADC, or OpenAI. Backend :5000.";
-      btn.addEventListener("click", async () => {
-        const v = reelAiBoundVideo;
-        if (!v || !v.isConnected) return;
-        clearReelAiPanel();
-        btn.disabled = true;
-        const prev = btn.textContent;
-        btn.textContent = "…";
-        try {
-          const text = buildReelAnalyzeText(v);
-          const frame = tryCaptureVideoFrameDataUrl(v);
-          const images = frame ? [frame] : [];
-          const result = await analyzeReelVisual(text, images);
-          const card = renderCard(result);
-          const panel = document.createElement("div");
-          panel.className = "veritas-reel-ai-panel";
-          panel.appendChild(card);
-          reelAiHostEl.appendChild(panel);
-          reelAiPanelEl = panel;
-        } catch (e) {
-          const err = document.createElement("div");
-          err.className = "veritas-reel-ai-error";
-          const raw = e && e.message ? String(e.message) : String(e);
-          const detail =
-            raw && raw.length > 0
-              ? formatExtensionMessagingError(raw)
-              : "Veritas visual check failed (no details). Is the backend on :5000? Set OPENAI_API_KEY in backend/.env, restart the backend, reload the page.";
-          const msg = document.createElement("div");
-          msg.textContent =
-            detail.length > 0 && !detail.startsWith("Veritas visual")
-              ? `Veritas visual check failed:\n${detail}`
-              : detail;
-          err.appendChild(msg);
-          if (/Refresh the page|refresh this tab/i.test(detail)) {
-            const reload = document.createElement("button");
-            reload.type = "button";
-            reload.className = "veritas-reel-ai-reload";
-            reload.textContent = "Reload this page";
-            reload.addEventListener("click", () => location.reload());
-            err.appendChild(reload);
-          }
-          reelAiHostEl.appendChild(err);
-        } finally {
-          btn.disabled = false;
-          btn.textContent = prev;
-        }
-      });
-
-      reelAiHostEl.appendChild(btn);
-      document.body.appendChild(reelAiHostEl);
-
-      const onSync = () => syncReelAiHostRect(reelAiBoundVideo);
-      reelAiHostEl.__veritas_onSync = onSync;
-      window.addEventListener("scroll", onSync, true);
-      window.addEventListener("resize", onSync);
-      try {
-        reelAiHostEl.__veritas_ro = new ResizeObserver(onSync);
-      } catch {
-        reelAiHostEl.__veritas_ro = null;
-      }
-    }
-
-    if (reelAiBoundVideo !== video) {
-      reelAiBoundVideo = video;
-      clearReelAiPanel();
-      try {
-        reelAiHostEl.__veritas_ro?.disconnect();
-        reelAiHostEl.__veritas_ro?.observe(video);
-      } catch {
-        /* ignore */
-      }
-    }
-
-    syncReelAiHostRect(video);
+    return host;
   }
 
   async function processPost(el) {
     if (el.getAttribute(TAG_ATTR) === "1") return;
     el.setAttribute(TAG_ATTR, "1");
+
+    const host = ensurePostToolbarHost(el);
+
+    const row = document.createElement("div");
+    row.className = "veritas-check-ai-row";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "veritas-check-ai-btn";
+    btn.textContent = "Check AI";
+    btn.addEventListener("click", async () => {
+      const panel = mountCheckAiPanel(host);
+      panel.innerHTML =
+        '<div class="veritas-check-ai-card veritas-check-ai-card--loading">Analyzing image…</div>';
+      btn.disabled = true;
+      try {
+        const payload = captureMediaForCheckAi(el);
+        const result = await checkAiAnalyze(payload);
+        renderCheckAiResult(panel, result);
+      } catch (e) {
+        const msg = escapeHtml(String(e?.message || e));
+        panel.innerHTML = `<div class="veritas-check-ai-card veritas-check-ai-card--err">${msg}</div>`;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    row.appendChild(btn);
+    host.appendChild(row);
 
     const text = postTextFromElement(el);
     if (!text || text.length < 10) return;
@@ -1123,9 +1089,9 @@
     try {
       const result = await analyze(text);
       const card = renderCard(result);
-      el.appendChild(card);
-    } catch (e) {
-      // If backend is down, silently skip.
+      host.appendChild(card);
+    } catch {
+      /* backend down — Check AI still available */
     }
   }
 
@@ -1142,10 +1108,14 @@
   }
 
   if (isInstagram) {
-    scanInstagram();
+    const runIg = () => {
+      scanInstagram();
+      scanFeed();
+    };
+    runIg();
     const obs = new MutationObserver(() => {
       window.clearTimeout(scanInstagram._t);
-      scanInstagram._t = window.setTimeout(scanInstagram, 500);
+      scanInstagram._t = window.setTimeout(runIg, 500);
     });
     obs.observe(document.documentElement, { childList: true, subtree: true });
     return;

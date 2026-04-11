@@ -5,20 +5,20 @@ const morgan = require("morgan");
 const { getEnv, resolveOpenAiApiKey } = require("./lib/env");
 const { connectDb, isDbReady } = require("./lib/db");
 const apiRoutes = require("./routes");
-const analyzeVisualRoutes = require("./routes/analyzeVisual");
 
 async function main() {
   const env = getEnv();
   const openaiKey = resolveOpenAiApiKey(env);
+
   if (!openaiKey) {
     // eslint-disable-next-line no-console
     console.warn(
-      "[Veritas] No OpenAI key found after loading env files (project .env + backend/.env). Set OPENAI_API_KEY, restart this server (stop any duplicate Node on the same port), then retry the extension."
+      "[Veritas] No OpenAI key found after loading env files (project .env + backend/.env). Set OPENAI_API_KEY for /api/analyze and /api/check-ai, restart this server."
     );
   } else {
     // eslint-disable-next-line no-console
     console.log(
-      `[Veritas] OpenAI API key OK (${openaiKey.length} chars; value not printed). Reel vision will call OpenAI with your frames.`
+      `[Veritas] OpenAI API key OK (${openaiKey.length} chars; value not printed). Text: POST /api/analyze · Vision: POST /api/check-ai.`
     );
   }
 
@@ -41,21 +41,9 @@ async function main() {
     res.json({
       ok: true,
       dbReady: isDbReady(),
-      reelVision: {
-        willUseMock: !keyOk,
-        openAiConfigured: keyOk,
-      },
+      openAiConfigured: keyOk,
     });
   });
-
-  // Mount reel vision on the app (before app.use("/api", …)) so POST /api/analyze-visual is never shadowed by /api/analyze.
-  app.get("/api/analyze-visual", (_req, res) =>
-    res.json({
-      ok: true,
-      hint: "POST JSON body: { text?: string, images: string[] } (data URLs). Extension: POST http://localhost:5000/api/analyze-visual",
-    })
-  );
-  app.use("/api/analyze-visual", analyzeVisualRoutes);
 
   app.use("/api", apiRoutes);
 
@@ -69,7 +57,9 @@ async function main() {
     // eslint-disable-next-line no-console
     console.log(`Veritas backend listening on http://localhost:${env.PORT}`);
     // eslint-disable-next-line no-console
-    console.log(`  Reel vision: POST http://localhost:${env.PORT}/api/analyze-visual`);
+    console.log(`  Text analyze: POST http://localhost:${env.PORT}/api/analyze`);
+    // eslint-disable-next-line no-console
+    console.log(`  Check AI (vision): POST http://localhost:${env.PORT}/api/check-ai`);
     // eslint-disable-next-line no-console
     if (env.PORT === 5000) console.log("Backend running on port 5000");
   });

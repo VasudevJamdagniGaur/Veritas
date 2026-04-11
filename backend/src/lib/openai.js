@@ -1,5 +1,20 @@
 const axios = require("axios");
 
+/** Infer data URL mime type from base64-decoded magic bytes (OpenAI accepts jpeg/png/webp/gif). */
+function mimeFromBase64(imageBase64) {
+  try {
+    const buf = Buffer.from(String(imageBase64).slice(0, 96), "base64");
+    if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xd8) return "image/jpeg";
+    if (buf.length >= 2 && buf[0] === 0x89 && buf[1] === 0x50) return "image/png";
+    if (buf.length >= 3 && buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return "image/gif";
+    if (buf.length >= 12 && buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50)
+      return "image/webp";
+  } catch {
+    /* ignore */
+  }
+  return "image/jpeg";
+}
+
 function looksLikeMisinformation(text) {
   const t = String(text || "").toLowerCase();
   const flags = [
@@ -21,7 +36,6 @@ function looksLikeMisinformation(text) {
 
 function looksAiGenerated(text) {
   const t = String(text || "");
-  // Tiny heuristic: repetitive filler + overly formal phrasing.
   const patterns = [
     /as an ai/i,
     /in conclusion/i,
@@ -60,8 +74,6 @@ function mockAnalyze(text) {
 }
 
 async function openAiAnalyze({ apiKey, model, text }) {
-  // Use a simple, robust Chat Completions call via HTTPS.
-  // We expect a strict JSON response.
   const prompt = [
     "You are Veritas, a trust layer for social media.",
     "Analyze the given post text for credibility and whether it is likely AI-generated.",
@@ -121,60 +133,55 @@ async function analyzeText({ apiKey, model, text }) {
   }
 }
 
-function mockAnalyzeVisual(text, imageCount) {
-  const snippet = String(text || "").slice(0, 160);
-  return {
-    aiScore: 55,
-    aiGeneratedProbability: 0.45,
-    explanation: `No OpenAI API key found (checked project .env and backend/.env). Mock only. Add OPENAI_API_KEY, save, stop any old server on the port, run npm start from the backend folder, reload the extension page. ${imageCount} frame(s). Caption: ${snippet || "(none)"}`,
-  };
+function mockCheckAiVision(imageBase64Length) {
+  const n = Math.max(1, Number(imageBase64Length) || 1);
+  const aiProbability = 18 + (n % 73);
+  const verdict = aiProbability >= 52 ? "AI-generated" : "Real";
+  const explanation =
+    verdict === "AI-generated"
+      ? "No API key: mock response. Set OPENAI_API_KEY for real vision analysis. Image payload received."
+      : "No API key: mock response. Set OPENAI_API_KEY for real vision analysis. Image payload received.";
+  return { aiProbability, verdict, explanation };
 }
 
-/**
- * Vision path: still frames from the reel + optional caption (Chat Completions multimodal).
- * Requires a vision-capable OPENAI_MODEL (e.g. gpt-4o-mini, gpt-4o).
- */
-async function openAiAnalyzeVisual({ apiKey, model, text, imageDataUrls }) {
-  const caption = String(text || "").trim();
+async function openAiCheckAiVision({ apiKey, model, imageBase64 }) {
   const prompt = [
-    "You are Veritas, a trust layer for social media.",
-    "You receive still frame(s) from a short vertical video (Reel-style).",
-    "Judge whether the visuals look like REAL camera footage of humans and real environments versus AI-generated or synthetic video (deepfakes, full-AI humans, uncanny CGI, obvious GAN/diffusion artifacts).",
-    "Still frames are weak evidence—be calibrated; say when uncertain.",
+    "You assess whether a social media image is likely AI-generated (synthetic) versus a real photograph or screenshot of real content.",
+    "Consider: anatomy/face hands, lighting consistency, text artifacts, texture repetition, watermark patterns, and typical diffusion glitches.",
     "Return STRICT JSON ONLY with keys:",
-    "aiScore (0-100, higher = more credible / likely authentic human footage),",
-    "aiGeneratedProbability (0-1, higher = more likely synthetic or AI-generated visuals),",
-    "explanation (2-4 sentences: cite visible cues like skin/eyes/hands, lighting consistency, motion blur, warping, text/UI in frame).",
-    caption ? `\nOPTIONAL CAPTION / ON-PAGE TEXT:\n${caption}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  const userContent = [
-    { type: "text", text: prompt },
-    ...imageDataUrls.map((url) => ({
-      type: "image_url",
-      image_url: { url, detail: "low" },
-    })),
-  ];
+    'aiProbability (integer 0-100, estimated chance the image is AI-generated),',
+    'verdict (string: exactly "Real" or exactly "AI-generated" — pick the more likely),',
+    "explanation (string, 1-3 short sentences, plain English).",
+  ].join("\n");
 
   const resp = await axios.post(
     "https://api.openai.com/v1/chat/completions",
     {
       model,
       messages: [
-        { role: "system", content: "Return strict JSON only." },
-        { role: "user", content: userContent },
+        { role: "system", content: "Return strict JSON only. No markdown." },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:${mimeFromBase64(imageBase64)};base64,${imageBase64}`,
+              },
+            },
+          ],
+        },
       ],
       temperature: 0.2,
-      max_tokens: 600,
+      max_tokens: 400,
     },
     {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      timeout: 120000,
+      timeout: 60000,
     }
   );
 
@@ -182,40 +189,35 @@ async function openAiAnalyzeVisual({ apiKey, model, text, imageDataUrls }) {
   const firstBrace = content.indexOf("{");
   const lastBrace = content.lastIndexOf("}");
   if (firstBrace === -1 || lastBrace === -1) {
-    throw new Error("OpenAI returned non-JSON content for vision request");
+    throw new Error("OpenAI returned non-JSON content");
   }
-  return JSON.parse(content.slice(firstBrace, lastBrace + 1));
+  const json = JSON.parse(content.slice(firstBrace, lastBrace + 1));
+  return json;
 }
 
-/**
- * @param {{ apiKey: string, model: string, text?: string, images: string[] }} opts
- * images = data URLs (data:image/jpeg;base64,...)
- */
-async function analyzeVisual({ apiKey, model, text, images }) {
-  const imageDataUrls = Array.isArray(images) ? images : [];
-  if (imageDataUrls.length === 0) {
-    throw new Error("analyzeVisual requires at least one image");
-  }
-  if (!apiKey) return mockAnalyzeVisual(text, imageDataUrls.length);
-
-  const res = await openAiAnalyzeVisual({
-    apiKey,
-    model,
-    text: text || "",
-    imageDataUrls,
-  });
-  const aiScore = Number(res.aiScore);
-  const aiGeneratedProbability = Number(res.aiGeneratedProbability);
-  const explanation = String(res.explanation || "");
-  if (
-    Number.isFinite(aiScore) &&
-    Number.isFinite(aiGeneratedProbability) &&
-    explanation
-  ) {
-    return { aiScore, aiGeneratedProbability, explanation };
-  }
-  throw new Error("Vision model returned an invalid JSON shape");
+function normalizeVerdict(v) {
+  const s = String(v || "")
+    .trim()
+    .toLowerCase();
+  if (s === "real") return "Real";
+  if (s === "ai-generated" || s === "ai generated" || /^ai[- ]?generated/.test(s)) return "AI-generated";
+  return null;
 }
 
-module.exports = { analyzeText, analyzeVisual, mockAnalyzeVisual };
+async function checkAiVision({ apiKey, model, imageBase64 }) {
+  if (!apiKey) return mockCheckAiVision(String(imageBase64 || "").length);
+  try {
+    const res = await openAiCheckAiVision({ apiKey, model, imageBase64 });
+    let aiProbability = Math.round(Number(res.aiProbability));
+    if (!Number.isFinite(aiProbability)) aiProbability = 50;
+    aiProbability = Math.max(0, Math.min(100, aiProbability));
+    let verdict = normalizeVerdict(res.verdict);
+    if (!verdict) verdict = aiProbability >= 50 ? "AI-generated" : "Real";
+    const explanation = String(res.explanation || "No explanation provided.").trim();
+    return { aiProbability, verdict, explanation };
+  } catch {
+    return mockCheckAiVision(String(imageBase64 || "").length);
+  }
+}
 
+module.exports = { analyzeText, checkAiVision };

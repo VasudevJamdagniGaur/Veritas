@@ -205,6 +205,33 @@ function amazonInlineScoresViaApi(reviews) {
     });
 }
 
+function factCheckViaApi(payload) {
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), 120000);
+  return fetch(`${VERITAS_API_BASE}/fact-check`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text: String(payload.text),
+      url: payload.url != null ? String(payload.url) : undefined,
+      title: payload.title != null ? String(payload.title) : undefined,
+    }),
+    signal: ctrl.signal,
+  })
+    .then(async (resp) => {
+      clearTimeout(tid);
+      if (!resp.ok) {
+        const errBody = await resp.text().catch(() => "");
+        throw new Error(`Fact check failed: ${resp.status}${errBody ? ` ${errBody.slice(0, 240)}` : ""}`);
+      }
+      return resp.json();
+    })
+    .catch((e) => {
+      clearTimeout(tid);
+      throw e;
+    });
+}
+
 function amazonReviewTrustViaApi(reviewsText) {
   const ctrl = new AbortController();
   const tid = setTimeout(() => ctrl.abort(), 90000);
@@ -285,6 +312,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   if (t === "VERITAS_AMAZON_INLINE_SCORES" && Array.isArray(msg.reviews) && msg.reviews.length > 0) {
     amazonInlineScoresViaApi(msg.reviews)
+      .then((data) => sendResponse({ ok: true, data }))
+      .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+    return true;
+  }
+
+  if (t === "VERITAS_FACT_CHECK" && typeof msg.text === "string" && msg.text.length >= 80) {
+    factCheckViaApi({ text: msg.text, url: msg.url, title: msg.title })
       .then((data) => sendResponse({ ok: true, data }))
       .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
     return true;

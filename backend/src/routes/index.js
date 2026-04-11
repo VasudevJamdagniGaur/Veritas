@@ -6,6 +6,7 @@ const analyzeRoutes = require("./analyze");
 const checkAiRoutes = require("./checkAi");
 const amazonReviewTrustRoutes = require("./amazonReviewTrust");
 const amazonReviewScoresRoutes = require("./amazonReviewScores");
+const factCheckRoutes = require("./factCheck");
 const postsRoutes = require("./posts");
 const instagramRoutes = require("./instagram");
 
@@ -19,6 +20,7 @@ router.use("/analyze", analyzeRoutes);
 router.use("/check-ai", checkAiRoutes);
 router.use("/amazon-review-trust", amazonReviewTrustRoutes);
 router.use("/amazon-review-scores", amazonReviewScoresRoutes);
+router.use("/fact-check", factCheckRoutes);
 router.use("/posts", postsRoutes);
 router.use("/instagram", instagramRoutes);
 

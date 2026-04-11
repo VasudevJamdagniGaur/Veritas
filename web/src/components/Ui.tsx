@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useRef } from "react";
 
+/** Served from `web/public/media/`. Order: A → B → A → … at 0.4× */
+const base = import.meta.env.BASE_URL;
+export const DEFAULT_SHELL_BACKGROUND_VIDEOS = [
+  `${base}media/hero-rotate-a.mp4`,
+  `${base}media/hero-rotate-b.mp4`,
+] as const;
+
 /** 0.4× = 20% slower than previous 0.5× */
 const HERO_VIDEO_RATE = 0.4;
 /** Wall-clock crossfade; overlap uses video time = this × playback rate */
@@ -150,16 +157,16 @@ function HeroVideoRotator({ sources }: { sources: readonly string[] }) {
 
 export function Shell({
   children,
-  backgroundVideos,
+  backgroundVideos = DEFAULT_SHELL_BACKGROUND_VIDEOS,
 }: {
   children: React.ReactNode;
-  /** Full-screen background clips (e.g. opening page); cycles in order, 0.4× speed. */
+  /** Full-screen background clips; cycles in order, 0.4× speed. Defaults to hero A/B. Pass `[]` to disable. */
   backgroundVideos?: readonly string[];
 }) {
-  const hasBg = Boolean(backgroundVideos?.length);
+  const hasBg = backgroundVideos.length > 0;
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#121212] text-gray-100">
-      {hasBg ? <HeroVideoRotator sources={backgroundVideos!} /> : null}
+      {hasBg ? <HeroVideoRotator sources={backgroundVideos} /> : null}
       {hasBg ? (
         <div
           className="pointer-events-none fixed inset-0 z-[1] bg-[#121212]/70 backdrop-blur-[1px]"

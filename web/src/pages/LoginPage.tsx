@@ -6,10 +6,6 @@ import { auth } from "../lib/firebase";
 import { useApp } from "../state/appState";
 import { Card, Shell } from "../components/Ui";
 
-/** Served from `web/public/media/`. Order: A → B → A → … at 0.4× */
-const base = import.meta.env.BASE_URL;
-const OPENING_BG_VIDEOS = [`${base}media/hero-rotate-a.mp4`, `${base}media/hero-rotate-b.mp4`] as const;
-
 function GoogleMark() {
   return (
     <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" aria-hidden>
@@ -74,7 +70,7 @@ export default function LoginPage() {
   };
 
   return (
-    <Shell backgroundVideos={OPENING_BG_VIDEOS}>
+    <Shell>
       <div className="mb-10 text-center">
         <h1 className="text-5xl font-bold tracking-tight text-white sm:text-6xl md:text-7xl lg:text-8xl">
           Veritas

@@ -101,15 +101,16 @@ const UNIFIED_SYSTEM = `You help readers understand social posts in the style of
 
 Hard rules:
 - Do NOT paste or lightly rephrase the post as your analysis. No more than 5 consecutive words copied from the post.
+- Do NOT use hedging words in contentLabel, verdict, or explanation: never use "likely", "probably", "possibly", or "may" — write with clear, direct wording (e.g. say "Factual reporting" not "Likely factual"; say "Reports a match result" not "Likely reports").
 - "mainClaim" must be one sentence in neutral, analytical voice: what the post is doing (e.g. joke, satire, serious claim, opinion, rumor) and the topic—written as if explaining to someone who has not read the post.
 - If the post is satirical, humorous, or clearly fictional, say so explicitly; truthScore should be low as "literal news accuracy" and verdict often "Unverified"—that is correct for jokes.
 
 Respond with JSON only (no markdown). Keys:
-- "contentLabel": string — a short reader-facing label, pick the closest: "Satire or humor" | "Opinion or commentary" | "Likely factual" | "Likely misleading or false" | "Unverified or rumor" | "Mixed"
+- "contentLabel": string — short label, pick the closest (no hedging words): "Satire or humor" | "Opinion or commentary" | "Factual reporting" | "Misleading or false" | "Unverified or rumor" | "Mixed"
 - "mainClaim": string — one sentence analytical summary (NOT a quote of the post).
 - "truthScore": number 0-100 — if the post is satire/joke, use a LOW score for literal factual accuracy (the scenario is not real news). Use higher scores only for posts making real factual claims that check out.
-- "verdict": exactly one of: "Likely True", "Mixed / Unclear", "Likely False", "Unverified"
-- "explanation": string — 3 to 7 sentences like a Community Note: name whether it is satire/fake news/fact/opinion, why, and what a reader should know. Cite [n] for snippets if provided. If no sources, rely on reasoning and label satire clearly.`;
+- "verdict": exactly one of: "True" | "False" | "Mixed / Unclear" | "Unverified" — use "True" when the post’s factual claims are supported; "False" when contradicted or misleading as stated; "Unverified" when evidence is insufficient.
+- "explanation": string — 3 to 7 sentences: direct, confident tone (no "likely/probably/possibly"). Name satire vs fact vs opinion. Cite [n] for snippets if provided.`;
 
 
 async function unifiedFactCheck({ apiKey, model, articleText, title, url, sourcesBlock, hadSources }) {
@@ -141,17 +142,32 @@ async function unifiedFactCheck({ apiKey, model, articleText, title, url, source
 }
 
 function normalizeVerdict(v) {
-  const s = String(v || "").toLowerCase();
-  if (s.includes("likely true")) return "Likely True";
-  if (s.includes("likely false")) return "Likely False";
+  const raw = String(v || "").trim();
+  const s = raw.toLowerCase();
+  if (s === "true" || s === "likely true" || s.includes("likely true") || /\bsupported\b/.test(s)) return "True";
+  if (s === "false" || s === "likely false" || s.includes("likely false") || /\bcontradicted\b/.test(s) || /\bnot supported\b/.test(s)) {
+    return "False";
+  }
+  if (/\bmisleading\b/.test(s) && !/\bnot misleading\b/.test(s)) return "False";
   if (s.includes("mixed") || s.includes("unclear")) return "Mixed / Unclear";
   return "Unverified";
 }
 
+/** Strip hedging words from labels; model may still emit old phrasing. */
 function normalizeContentLabel(s) {
-  const t = String(s || "")
+  let t = String(s || "")
     .trim()
     .slice(0, 120);
+  t = t
+    .replace(/\blikely\b/gi, "")
+    .replace(/\bprobably\b/gi, "")
+    .replace(/\bpossibly\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^\s*,\s*/, "")
+    .trim();
+  if (t.length) {
+    t = t.charAt(0).toUpperCase() + t.slice(1);
+  }
   return t || "Context";
 }
 
@@ -162,7 +178,12 @@ function normalizeUnifiedJson(json) {
   const mainClaim = String(json.mainClaim || "").trim() || "Context could not be summarized.";
   const contentLabel = normalizeContentLabel(json.contentLabel);
   const verdict = normalizeVerdict(json.verdict);
-  const explanation = String(json.explanation || "").trim() || "No explanation returned.";
+  let explanation = String(json.explanation || "").trim() || "No explanation returned.";
+  explanation = explanation
+    .replace(/\b(likely|probably|possibly)\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([.,!?;:])/g, "$1")
+    .trim();
   return { mainClaim, contentLabel, truthScore, verdict, explanation };
 }
 

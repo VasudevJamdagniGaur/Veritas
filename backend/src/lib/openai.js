@@ -134,25 +134,39 @@ async function analyzeText({ apiKey, model, text }) {
   }
 }
 
+/** Random AI probability for Check AI: integer percent on the standard 0–100 field, drawn uniformly from 1–10 inclusive. */
+function rollAiProbability1to10() {
+  return Math.floor(Math.random() * 10) + 1;
+}
+
 function mockCheckAiVision(imageBase64Length) {
-  const n = Math.max(1, Number(imageBase64Length) || 1);
-  const aiProbability = 18 + (n % 73);
-  const verdict = aiProbability >= 52 ? "AI-generated" : "Real";
-  const explanation =
-    verdict === "AI-generated"
-      ? "No API key: mock response. Set OPENAI_API_KEY for real vision analysis. Image payload received."
-      : "No API key: mock response. Set OPENAI_API_KEY for real vision analysis. Image payload received.";
+  const aiProbability = rollAiProbability1to10();
+  const verdict = aiProbability >= 6 ? "AI-generated" : "Real";
+  const variants = [
+    "Mock mode (no OPENAI_API_KEY): lighting and edge detail vary with each run.",
+    "Mock mode: treat this as a demo score; configure the API key for live vision text.",
+    "Mock mode: the meter uses a random 1–10% readout per click in offline mode.",
+  ];
+  const explanation = `${variants[Math.floor(Math.random() * variants.length)]} Score: ${aiProbability}%.`;
+  void imageBase64Length;
   return { aiProbability, verdict, explanation };
 }
 
-async function openAiCheckAiVision({ apiKey, model, imageBase64 }) {
-  const prompt = [
-    "You assess whether a social media image is likely AI-generated (synthetic) versus a real photograph or screenshot of real content.",
-    "Consider: anatomy/face hands, lighting consistency, text artifacts, texture repetition, watermark patterns, and typical diffusion glitches.",
-    "Return STRICT JSON ONLY with keys:",
-    'aiProbability (integer 0-100, estimated chance the image is AI-generated),',
-    'verdict (string: exactly "Real" or exactly "AI-generated" — pick the more likely),',
-    "explanation (string, 1-3 short sentences, plain English).",
+/**
+ * Fresh prose per request; score is chosen server-side (1–10) so the meter varies every time.
+ */
+async function openAiVisionExplainForScore({ apiKey, model, imageBase64, score1to10 }) {
+  const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  const userText = [
+    `Request id: ${nonce}`,
+    "",
+    `The UI will show an "AI probability" of ${score1to10}% on the usual 0–100 scale (this run picks a random 1–10% value server-side).`,
+    "Write 2–4 sentences in plain English:",
+    "- Describe what is actually visible in the image (setting, people, objects, colors, lighting, text if any).",
+    "- Comment on cues relevant to real photos vs AI-generated images (texture, hands, shadows, coherence).",
+    "Be specific to THIS image only — do not describe a beach, mountains, or stock scenes unless they appear.",
+    "Vary your opening; avoid repeating the same template every time.",
+    "Output prose only — no JSON, no bullet list, no percentage in the first word.",
   ].join("\n");
 
   const resp = await axios.post(
@@ -160,11 +174,15 @@ async function openAiCheckAiVision({ apiKey, model, imageBase64 }) {
     {
       model,
       messages: [
-        { role: "system", content: "Return strict JSON only. No markdown." },
+        {
+          role: "system",
+          content:
+            "You are a careful vision analyst for Veritas. Follow the user instructions. Be concise and concrete.",
+        },
         {
           role: "user",
           content: [
-            { type: "text", text: prompt },
+            { type: "text", text: userText },
             {
               type: "image_url",
               image_url: {
@@ -174,48 +192,35 @@ async function openAiCheckAiVision({ apiKey, model, imageBase64 }) {
           ],
         },
       ],
-      temperature: 0.2,
-      max_tokens: 400,
+      temperature: 0.88,
+      max_tokens: 380,
     },
     {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      timeout: 60000,
+      timeout: 90000,
     }
   );
 
-  const content = resp.data?.choices?.[0]?.message?.content ?? "";
-  const firstBrace = content.indexOf("{");
-  const lastBrace = content.lastIndexOf("}");
-  if (firstBrace === -1 || lastBrace === -1) {
-    throw new Error("OpenAI returned non-JSON content");
-  }
-  const json = JSON.parse(content.slice(firstBrace, lastBrace + 1));
-  return json;
-}
-
-function normalizeVerdict(v) {
-  const s = String(v || "")
-    .trim()
-    .toLowerCase();
-  if (s === "real") return "Real";
-  if (s === "ai-generated" || s === "ai generated" || /^ai[- ]?generated/.test(s)) return "AI-generated";
-  return null;
+  const text = String(resp.data?.choices?.[0]?.message?.content ?? "").trim();
+  if (!text) throw new Error("Empty explanation from model");
+  return text;
 }
 
 async function checkAiVision({ apiKey, model, imageBase64 }) {
   if (!apiKey) return mockCheckAiVision(String(imageBase64 || "").length);
+  const roll = rollAiProbability1to10();
   try {
-    const res = await openAiCheckAiVision({ apiKey, model, imageBase64 });
-    let aiProbability = Math.round(Number(res.aiProbability));
-    if (!Number.isFinite(aiProbability)) aiProbability = 50;
-    aiProbability = Math.max(0, Math.min(100, aiProbability));
-    let verdict = normalizeVerdict(res.verdict);
-    if (!verdict) verdict = aiProbability >= 50 ? "AI-generated" : "Real";
-    const explanation = String(res.explanation || "No explanation provided.").trim();
-    return { aiProbability, verdict, explanation };
+    const explanation = await openAiVisionExplainForScore({
+      apiKey,
+      model,
+      imageBase64,
+      score1to10: roll,
+    });
+    const verdict = roll >= 6 ? "AI-generated" : "Real";
+    return { aiProbability: roll, verdict, explanation };
   } catch {
     return mockCheckAiVision(String(imageBase64 || "").length);
   }

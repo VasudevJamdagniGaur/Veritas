@@ -1659,7 +1659,17 @@
   }
 
   function renderCheckAiResult(panel, { aiProbability, verdict, explanation }) {
-    const pct = clamp(Math.round(Number(aiProbability)), 0, 100);
+    const raw = Math.round(Number(aiProbability));
+    /** Check AI returns a random percent 1–10 on the usual 0–100 scale; other callers may send any 0–100 value. */
+    let displayPct;
+    let barWidth;
+    if (raw >= 1 && raw <= 10) {
+      displayPct = raw;
+      barWidth = raw;
+    } else {
+      displayPct = clamp(raw, 0, 100);
+      barWidth = displayPct;
+    }
     const isAi = verdict === "AI-generated";
     panel.innerHTML = "";
     const card = document.createElement("div");
@@ -1677,12 +1687,12 @@
 
     const meter = document.createElement("div");
     meter.className = "veritas-check-ai-meter";
-    meter.innerHTML = `<span>AI probability</span><strong>${pct}%</strong>`;
+    meter.innerHTML = `<span>AI probability</span><strong>${displayPct}%</strong>`;
 
     const barWrap = document.createElement("div");
     barWrap.className = "veritas-check-ai-bar";
     const bar = document.createElement("span");
-    bar.style.width = `${pct}%`;
+    bar.style.width = `${barWidth}%`;
     barWrap.appendChild(bar);
 
     const expl = document.createElement("p");
@@ -1715,14 +1725,14 @@
       btn.classList.add("veritas-check-ai-btn--ai");
       btn.innerHTML =
         '<svg class="veritas-check-ai-ic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="#f87171" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
-      btn.title = "Veritas: likely AI-generated — click to check again";
-      btn.setAttribute("aria-label", "Likely AI-generated. Click to check again.");
+      btn.title = "Veritas: AI-generated signal — click to check again";
+      btn.setAttribute("aria-label", "AI-generated signal. Click to check again.");
     } else {
       btn.classList.add("veritas-check-ai-btn--real");
       btn.innerHTML =
         '<svg class="veritas-check-ai-ic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none"><path stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M20 6L9 17l-5-5"/></svg>';
-      btn.title = "Veritas: likely not AI-generated — click to check again";
-      btn.setAttribute("aria-label", "Likely not AI-generated. Click to check again.");
+      btn.title = "Veritas: reads as authentic — click to check again";
+      btn.setAttribute("aria-label", "Reads as authentic. Click to check again.");
     }
   }
 

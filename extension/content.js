@@ -1251,6 +1251,9 @@
       panel.innerHTML =
         '<div class="veritas-check-ai-card veritas-check-ai-card--loading">Analyzing image…</div>';
       btn.disabled = true;
+      if (isX) {
+        host.querySelectorAll(".veritas-card").forEach((c) => c.remove());
+      }
       try {
         const payload = captureMediaForCheckAi(captureRoot);
         const result = await checkAiAnalyze(payload);
@@ -1260,6 +1263,18 @@
         panel.innerHTML = `<div class="veritas-check-ai-card veritas-check-ai-card--err">${msg}</div>`;
       } finally {
         btn.disabled = false;
+      }
+      if (isX) {
+        const text = postTextFromElement(captureRoot);
+        if (text && text.length >= 10) {
+          try {
+            const tr = await analyze(text);
+            const card = renderCard(tr);
+            host.appendChild(card);
+          } catch {
+            /* backend down */
+          }
+        }
       }
     });
     row.appendChild(btn);
@@ -1531,6 +1546,9 @@
 
     const text = postTextFromElement(el);
     if (!text || text.length < 10) return;
+
+    /* X/Twitter: do not auto-show Veritas text scores; they appear only after "Check AI" is pressed. */
+    if (isX) return;
 
     try {
       const result = await analyze(text);

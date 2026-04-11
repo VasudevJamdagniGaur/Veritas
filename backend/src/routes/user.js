@@ -68,9 +68,41 @@ function normalizeHandle(raw) {
     .replace(/^u\//i, "");
 }
 
+/** Same rules as auth: letters, digits, underscore, max 32 — used only to recover session when userId lookup fails. */
+function normalizeUsernameForLookup(raw) {
+  const clean = String(raw || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9_]/g, "_")
+    .slice(0, 32);
+  return clean.length >= 2 ? clean : "";
+}
+
+function findUserMemoryByIdOrUsername(userId, username) {
+  let user = memoryStore.findUserById(userId);
+  if (user) return user;
+  const u = normalizeUsernameForLookup(username);
+  if (u) user = memoryStore.findUserByUsername(u);
+  return user || null;
+}
+
+async function findUserMongoByIdOrUsername(userId, username) {
+  let user = null;
+  try {
+    user = await User.findById(userId);
+  } catch {
+    user = null;
+  }
+  if (user) return user;
+  const u = normalizeUsernameForLookup(username);
+  if (!u) return null;
+  return User.findOne({ username: u });
+}
+
 router.post("/link-social", async (req, res) => {
   const schema = z.object({
     userId: z.string().min(1),
+    /** Helps recover the account when userId is stale (e.g. memory vs Mongo) or not a valid ObjectId. */
+    username: z.string().optional().default(""),
     socialHandle: z.string().optional().default(""),
     socialUrl: z.string().optional().default(""),
     linkedinUrl: z.string().optional().default(""),
@@ -83,7 +115,16 @@ router.post("/link-social", async (req, res) => {
     return res.status(400).json({ error: "Invalid payload", details: parsed.error.issues });
   }
 
-  const { userId, socialHandle, socialUrl, linkedinUrl, redditUsername, instagramHandle, xHandle } = parsed.data;
+  const {
+    userId,
+    username: usernameField,
+    socialHandle,
+    socialUrl,
+    linkedinUrl,
+    redditUsername,
+    instagramHandle,
+    xHandle,
+  } = parsed.data;
 
   const li = linkedinUrl.trim();
   const rd = normalizeHandle(redditUsername);
@@ -114,7 +155,7 @@ router.post("/link-social", async (req, res) => {
   };
 
   if (!isDbReady()) {
-    const user = memoryStore.findUserById(userId);
+    const user = findUserMemoryByIdOrUsername(userId, usernameField);
     if (!user) return res.status(404).json({ error: "User not found" });
     persistWalletIdMemory(user);
     applyLinks(user);
@@ -122,7 +163,7 @@ router.post("/link-social", async (req, res) => {
     return res.json({ user, db: "memory" });
   }
 
-  const user = await User.findById(userId);
+  const user = await findUserMongoByIdOrUsername(userId, usernameField);
   if (!user) return res.status(404).json({ error: "User not found" });
 
   await persistWalletIdMongo(user);

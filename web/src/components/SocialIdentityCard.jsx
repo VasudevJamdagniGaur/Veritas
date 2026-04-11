@@ -27,7 +27,7 @@ function socialPayloadOk(platformKey, parsed) {
   }
 }
 
-function SocialConnectRow({ platformKey, label, connected, detail, userId, onLinked }) {
+function SocialConnectRow({ platformKey, label, connected, detail, userId, accountUsername, onLinked }) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [err, setErr] = useState("");
@@ -54,6 +54,7 @@ function SocialConnectRow({ platformKey, label, connected, detail, userId, onLin
     try {
       const resp = await api.post("/user/link-social", {
         userId,
+        username: String(accountUsername || "").trim(),
         ...parsed,
       });
       onLinked(resp.data.user);
@@ -196,6 +197,7 @@ export default function SocialIdentityCard({ user, userId, onLinked, className =
             connected={row.connected}
             detail={row.detail}
             userId={userId}
+            accountUsername={user?.username}
             onLinked={onLinked}
           />
         ))}

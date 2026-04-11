@@ -61,6 +61,7 @@ export default function DashboardPage() {
     try {
       const resp = await api.post<{ user: User }>("/user/link-social", {
         userId: user._id,
+        username: String(user.username || "").trim(),
         socialHandle: socialHandle.trim(),
         socialUrl: socialUrl.trim(),
       });

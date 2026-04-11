@@ -72,7 +72,7 @@ export default function LoginPage() {
 
   return (
     <Shell>
-      <div className="mb-10 text-center">
+      <div className="mb-12 text-center">
         <h1 className="text-5xl font-bold tracking-tight text-white sm:text-6xl md:text-7xl lg:text-8xl">
           Veritas
         </h1>

@@ -359,6 +359,34 @@
         color: #d1d5db;
         font-size: 12px;
       }
+      .veritas-check-ai-topbar {
+        display: flex;
+        align-items: center;
+        margin: -2px 0 6px;
+      }
+      .veritas-check-ai-back-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        margin: 0 0 0 -6px;
+        border: none;
+        border-radius: 8px;
+        background: transparent;
+        color: #9ca3af;
+        font-size: 11px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+      }
+      .veritas-check-ai-back-btn:hover {
+        color: #e5e7eb;
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .veritas-check-ai-back-btn:focus-visible {
+        outline: 2px solid #f472b6;
+        outline-offset: 1px;
+      }
 
       /* Instagram full-screen Reel: pin Check AI to top-right of the video frame */
       .veritas-ig-reel-overlay {
@@ -626,6 +654,34 @@
       }
       .veritas-fc-popover.veritas-fc-popover--open {
         display: block;
+      }
+      .veritas-fc-topbar {
+        display: flex;
+        align-items: center;
+        margin: -2px 0 8px;
+      }
+      .veritas-fc-back-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 8px;
+        margin: 0 0 0 -4px;
+        border: none;
+        border-radius: 8px;
+        background: transparent;
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+      }
+      .veritas-fc-back-btn:hover {
+        color: #e2e8f0;
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .veritas-fc-back-btn:focus-visible {
+        outline: 2px solid #38bdf8;
+        outline-offset: 1px;
       }
       .veritas-factcheck-nature {
         font-size: 10px;
@@ -1658,7 +1714,7 @@
     return panel;
   }
 
-  function renderCheckAiResult(panel, { aiProbability, verdict, explanation }) {
+  function renderCheckAiResult(panel, { aiProbability, verdict, explanation }, checkAiBtn) {
     const raw = Math.round(Number(aiProbability));
     /** Check AI returns a random percent 1–10 on the usual 0–100 scale; other callers may send any 0–100 value. */
     let displayPct;
@@ -1671,7 +1727,8 @@
       barWidth = displayPct;
     }
     const isAi = verdict === "AI-generated";
-    panel.innerHTML = "";
+    panel.textContent = "";
+    if (checkAiBtn) panel.appendChild(buildCheckAiBackBar(panel, checkAiBtn));
     const card = document.createElement("div");
     card.className = "veritas-check-ai-card";
     const head = document.createElement("div");
@@ -1769,17 +1826,29 @@
     btn.addEventListener("click", async () => {
       resetCheckAiButton(btn);
       const panel = mountCheckAiPanel(host);
-      panel.innerHTML =
-        '<div class="veritas-check-ai-card veritas-check-ai-card--loading">Analyzing image…</div>';
+      delete panel.dataset.veritasCheckAiDismissed;
+      panel.textContent = "";
+      panel.appendChild(buildCheckAiBackBar(panel, btn));
+      const loadingCard = document.createElement("div");
+      loadingCard.className = "veritas-check-ai-card veritas-check-ai-card--loading";
+      loadingCard.textContent = "Analyzing image…";
+      panel.appendChild(loadingCard);
       btn.disabled = true;
       try {
         const payload = captureMediaForCheckAi(captureRoot);
         const result = await checkAiAnalyze(payload);
-        renderCheckAiResult(panel, result);
+        if (panel.dataset.veritasCheckAiDismissed === "1") return;
+        renderCheckAiResult(panel, result, btn);
         setCheckAiButtonAfterResult(btn, result);
       } catch (e) {
+        if (panel.dataset.veritasCheckAiDismissed === "1") return;
         const msg = escapeHtml(String(e?.message || e));
-        panel.innerHTML = `<div class="veritas-check-ai-card veritas-check-ai-card--err">${msg}</div>`;
+        panel.textContent = "";
+        panel.appendChild(buildCheckAiBackBar(panel, btn));
+        const errCard = document.createElement("div");
+        errCard.className = "veritas-check-ai-card veritas-check-ai-card--err";
+        errCard.textContent = msg;
+        panel.appendChild(errCard);
         resetCheckAiButton(btn);
       } finally {
         btn.disabled = false;
@@ -1996,13 +2065,24 @@
         return;
       }
       panel.classList.add("veritas-fc-popover--open");
-      panel.innerHTML = '<div class="veritas-factcheck-loading">Analyzing post (satire vs fact vs opinion)…</div>';
+      delete panel.dataset.veritasFactCheckDismissed;
+      panel.textContent = "";
+      panel.appendChild(buildFactCheckTopBar(panel));
+      const loadingEl = document.createElement("div");
+      loadingEl.className = "veritas-factcheck-loading";
+      loadingEl.textContent = "Analyzing post (satire vs fact vs opinion)…";
+      panel.appendChild(loadingEl);
       btn.disabled = true;
       try {
         const text = extractArticleTextFromPost(articleEl);
         if (text.length < 40) {
-          panel.innerHTML =
-            '<div class="veritas-factcheck-err">Not enough text in this post (need at least ~40 characters).</div>';
+          if (panel.dataset.veritasFactCheckDismissed === "1") return;
+          panel.textContent = "";
+          panel.appendChild(buildFactCheckTopBar(panel));
+          const err = document.createElement("div");
+          err.className = "veritas-factcheck-err";
+          err.textContent = "Not enough text in this post (need at least ~40 characters).";
+          panel.appendChild(err);
           return;
         }
         const data = await factCheckClient({
@@ -2010,9 +2090,16 @@
           url: typeof location !== "undefined" ? location.href : "",
           title: typeof document !== "undefined" ? document.title : "",
         });
+        if (panel.dataset.veritasFactCheckDismissed === "1") return;
         renderFactCheckResult(panel, data);
       } catch (e) {
-        panel.innerHTML = `<div class="veritas-factcheck-err">${escapeHtml(String(e?.message || e))}</div>`;
+        if (panel.dataset.veritasFactCheckDismissed === "1") return;
+        panel.textContent = "";
+        panel.appendChild(buildFactCheckTopBar(panel));
+        const err = document.createElement("div");
+        err.className = "veritas-factcheck-err";
+        err.textContent = escapeHtml(String(e?.message || e));
+        panel.appendChild(err);
       } finally {
         btn.disabled = false;
       }
@@ -2030,6 +2117,53 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
+  }
+
+  function getFactCheckLogoButton(panel) {
+    const s = panel.previousElementSibling;
+    return s && s.matches && s.matches(".veritas-fc-logo-btn") ? s : null;
+  }
+
+  function buildFactCheckTopBar(panel) {
+    const wrap = document.createElement("div");
+    wrap.className = "veritas-fc-topbar";
+    const back = document.createElement("button");
+    back.type = "button";
+    back.className = "veritas-fc-back-btn";
+    back.setAttribute("aria-label", "Back");
+    back.title = "Close";
+    back.innerHTML = '<span aria-hidden="true">←</span> Back';
+    back.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      panel.dataset.veritasFactCheckDismissed = "1";
+      panel.classList.remove("veritas-fc-popover--open");
+      panel.textContent = "";
+      const logo = getFactCheckLogoButton(panel);
+      if (logo) logo.disabled = false;
+    });
+    wrap.appendChild(back);
+    return wrap;
+  }
+
+  function buildCheckAiBackBar(panel, btn) {
+    const wrap = document.createElement("div");
+    wrap.className = "veritas-check-ai-topbar";
+    const back = document.createElement("button");
+    back.type = "button";
+    back.className = "veritas-check-ai-back-btn";
+    back.setAttribute("aria-label", "Back");
+    back.title = "Close";
+    back.innerHTML = '<span aria-hidden="true">←</span> Back';
+    back.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      panel.dataset.veritasCheckAiDismissed = "1";
+      panel.textContent = "";
+      resetCheckAiButton(btn);
+    });
+    wrap.appendChild(back);
+    return wrap;
   }
 
   function ensurePostToolbarHost(el) {
@@ -2454,8 +2588,10 @@
   }
 
   function renderFactCheckResult(panel, data) {
+    if (panel.dataset.veritasFactCheckDismissed === "1") return;
     const score = clamp(Math.round(Number(data.truthScore)), 0, 100);
     panel.textContent = "";
+    panel.appendChild(buildFactCheckTopBar(panel));
     const natureEl = document.createElement("div");
     natureEl.className = "veritas-factcheck-nature";
     natureEl.textContent = String(data.contentLabel || "Context");

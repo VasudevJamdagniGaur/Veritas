@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../state/appState";
-import { Shell } from "../components/Ui";
+import { ProfileMenu, Shell } from "../components/Ui";
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
@@ -227,7 +227,7 @@ export function WalletCard({ onConnect }) {
 
 export default function Dashboard() {
   const nav = useNavigate();
-  const { user } = useApp();
+  const { user, logout, refreshUser } = useApp();
   const [posts, setPosts] = useState([]);
 
   const mockUser = useMemo(
@@ -248,6 +248,11 @@ export default function Dashboard() {
     if (!user) return; // allow mock dashboard for demo visuals even without login
     if (!user.isHumanVerified) nav("/verify");
   }, [user, nav]);
+
+  useEffect(() => {
+    if (!user?._id) return;
+    refreshUser().catch(() => {});
+  }, [user?._id, refreshUser]);
 
   useEffect(() => {
     let cancelled = false;
@@ -275,11 +280,32 @@ export default function Dashboard() {
     <Shell>
       <div className="mb-6">
         <div className="text-sm text-gray-400">Dashboard</div>
-        <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
-          <h1 className="text-3xl font-semibold text-white">Welcome, {viewUser.username}</h1>
-          <div className="text-xs text-gray-400">
-            <span className="text-pink-200">Veritas</span> • Trust Layer for Social Media
+        <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-3xl font-semibold text-white">Welcome, {viewUser.username}</h1>
+            <p className="mt-1 text-xs text-gray-400">
+              <span className="text-pink-200">Veritas</span> • Trust Layer for Social Media
+            </p>
           </div>
+          <ProfileMenu
+            username={viewUser.username}
+            avatarSrc={user?.faceCaptureDataUrl || ""}
+            subtextWhenEmpty="No verification photo on file"
+            subtextWhenPhoto="Verification capture"
+            footer={(close) => (
+              <button
+                type="button"
+                onClick={() => {
+                  close();
+                  logout();
+                  nav("/");
+                }}
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
+              >
+                Log out
+              </button>
+            )}
+          />
         </div>
       </div>
 

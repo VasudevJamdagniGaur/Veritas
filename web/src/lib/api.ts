@@ -54,6 +54,8 @@ export type User = {
   isHumanVerified: boolean;
   socialHandle?: string;
   socialUrl?: string;
+  /** Data URL from last successful face verification capture */
+  faceCaptureDataUrl?: string;
 };
 
 export type AnalyzeResponse = {

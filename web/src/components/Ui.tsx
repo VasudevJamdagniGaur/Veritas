@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 /** Served from `web/public/media/`. Order: A → B → A → … at 0.4× */
 const base = import.meta.env.BASE_URL;
@@ -174,6 +174,98 @@ export function Shell({
         />
       ) : null}
       <div className="relative z-10 mx-auto w-full max-w-5xl px-5 py-10">{children}</div>
+    </div>
+  );
+}
+
+export function ProfileGlyph({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+
+export function CameraGlyph({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </svg>
+  );
+}
+
+export function ProfileMenu({
+  username,
+  avatarSrc,
+  subtextWhenEmpty = "Capture & Verify to save your photo here",
+  subtextWhenPhoto = "Verification capture",
+  footer,
+}: {
+  username: string;
+  avatarSrc: string;
+  subtextWhenEmpty?: string;
+  subtextWhenPhoto?: string;
+  footer?: (close: () => void) => React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const hasPhoto = Boolean(avatarSrc);
+
+  return (
+    <div className="relative shrink-0 self-end sm:self-start" ref={wrapRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm font-medium text-white shadow-sm backdrop-blur transition hover:bg-white/10"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+      >
+        <ProfileGlyph />
+        Profile
+      </button>
+      {open ? (
+        <div
+          className="absolute right-0 z-50 mt-2 w-[min(100vw-2.5rem,18rem)] rounded-2xl border border-white/10 bg-[#1a1a1a]/95 p-4 shadow-xl backdrop-blur-md"
+          role="dialog"
+          aria-label="Profile"
+        >
+          <div className="flex flex-col items-center text-center">
+            <div className="relative h-24 w-24 overflow-hidden rounded-full border border-white/15 bg-white/5">
+              {hasPhoto ? (
+                <img src={avatarSrc} alt="Verification capture" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-gray-500">
+                  <ProfileGlyph className="h-12 w-12 opacity-50" />
+                </div>
+              )}
+            </div>
+            <div className="mt-3 text-sm font-semibold text-white">{username}</div>
+            <p className="mt-1 text-xs text-gray-400">{hasPhoto ? subtextWhenPhoto : subtextWhenEmpty}</p>
+          </div>
+          {footer ? (
+            <div className="mt-4 border-t border-white/10 pt-3">{footer(() => setOpen(false))}</div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type User } from "../lib/api";
 import { useApp } from "../state/appState";
-import { Badge, Button, Card, Shell } from "../components/Ui";
+import { Button, CameraGlyph, Card, ProfileMenu, Shell } from "../components/Ui";
 
 export default function FaceVerificationPage() {
   const nav = useNavigate();
@@ -14,8 +14,14 @@ export default function FaceVerificationPage() {
   const [loading, setLoading] = useState(false);
   const [bootErr, setBootErr] = useState("");
   const [verifyErr, setVerifyErr] = useState("");
+  /** Latest frame from Capture & Verify (or restored from account after refresh). */
+  const [sessionCaptureUrl, setSessionCaptureUrl] = useState("");
+
+  const webcamSectionRef = useRef<HTMLDivElement>(null);
 
   const canVerify = useMemo(() => Boolean(user?._id), [user]);
+
+  const avatarSrc = sessionCaptureUrl || user?.faceCaptureDataUrl || "";
 
   const stopCamera = () => {
     const s = streamRef.current;
@@ -128,6 +134,7 @@ export default function FaceVerificationPage() {
     setLoading(true);
     try {
       const captureDataUrl = capture();
+      if (captureDataUrl) setSessionCaptureUrl(captureDataUrl);
       const resp = await api.post<{ user: User }>("/user/verify-face", {
         userId: u._id,
         captureDataUrl,
@@ -141,6 +148,7 @@ export default function FaceVerificationPage() {
         ...u,
         isHumanVerified: true,
         trustScore: Math.min(100, (u.trustScore ?? 50) + 15),
+        faceCaptureDataUrl: captureDataUrl || u.faceCaptureDataUrl,
       });
       nav("/dashboard");
     } finally {
@@ -148,9 +156,15 @@ export default function FaceVerificationPage() {
     }
   };
 
+  const goToCamera = (close: () => void) => {
+    close();
+    webcamSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    void startCamera();
+  };
+
   return (
     <Shell>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="text-sm text-gray-400">Step 2</div>
           <h1 className="mt-1 text-3xl font-semibold text-white">Face Verification</h1>
@@ -158,32 +172,52 @@ export default function FaceVerificationPage() {
             Proof-of-human: we capture a webcam frame and mark your account verified (no heavy ML).
           </p>
         </div>
-        <Badge label={user?.username || "Not logged in"} tone="gray" />
+        <ProfileMenu
+          username={user?.username || "Not logged in"}
+          avatarSrc={avatarSrc}
+          footer={(close) => (
+            <>
+              <button
+                type="button"
+                onClick={() => goToCamera(close)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
+              >
+                <CameraGlyph />
+                Camera
+              </button>
+              <p className="mt-2 text-center text-[11px] leading-snug text-gray-500">
+                Opens the live webcam below and restarts the camera if needed
+              </p>
+            </>
+          )}
+        />
       </div>
 
       <div className="grid gap-5 md:grid-cols-2">
-        <Card>
-          <div className="text-sm font-semibold text-white">Webcam</div>
-          <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-black/40">
-            <video
-              ref={videoRef}
-              className="h-[320px] w-full object-cover"
-              playsInline
-              muted
-              autoPlay
-            />
-          </div>
-          {bootErr ? <div className="mt-2 text-sm text-rose-300">{bootErr}</div> : null}
-          {streamErr ? <div className="mt-2 text-sm text-rose-300">{streamErr}</div> : null}
-          {verifyErr ? <div className="mt-2 text-sm text-rose-300">{verifyErr}</div> : null}
-          <div className="mt-4 flex items-center gap-3">
-            <Button onClick={onVerify} disabled={!canVerify || loading}>
-              {loading ? "Verifying…" : "Capture & Verify"}
-            </Button>
-            <span className="text-xs text-gray-400">This sets `isHumanVerified = true`.</span>
-          </div>
-          <canvas ref={canvasRef} className="hidden" />
-        </Card>
+        <div ref={webcamSectionRef}>
+          <Card>
+            <div className="text-sm font-semibold text-white">Webcam</div>
+            <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+              <video
+                ref={videoRef}
+                className="h-[320px] w-full object-cover"
+                playsInline
+                muted
+                autoPlay
+              />
+            </div>
+            {bootErr ? <div className="mt-2 text-sm text-rose-300">{bootErr}</div> : null}
+            {streamErr ? <div className="mt-2 text-sm text-rose-300">{streamErr}</div> : null}
+            {verifyErr ? <div className="mt-2 text-sm text-rose-300">{verifyErr}</div> : null}
+            <div className="mt-4 flex items-center gap-3">
+              <Button onClick={onVerify} disabled={!canVerify || loading}>
+                {loading ? "Verifying…" : "Capture & Verify"}
+              </Button>
+              <span className="text-xs text-gray-400">This sets `isHumanVerified = true`.</span>
+            </div>
+            <canvas ref={canvasRef} className="hidden" />
+          </Card>
+        </div>
 
         <Card>
           <div className="text-sm font-semibold text-white">What this unlocks</div>

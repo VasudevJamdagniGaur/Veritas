@@ -190,7 +190,10 @@ export default function FaceVerificationPage() {
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-gray-300">
             <li>Higher trust score</li>
             <li>Lower bot probability</li>
-            <li>Extension credibility badge improves for your content</li>
+            <li>Veritas credibility badge</li>
+            <li>
+              Veritas Wallet ID: your digital passport which is your cross-platform trust identity
+            </li>
           </ul>
         </Card>
       </div>

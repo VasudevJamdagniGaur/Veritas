@@ -197,10 +197,6 @@ export default function FaceVerificationPage() {
           username={user?.username || "Not logged in"}
           avatarSrc={avatarSrc}
           walletId={user?.walletId}
-          onConnectWallet={() => {
-            // eslint-disable-next-line no-console
-            console.log("Connect wallet clicked");
-          }}
           footer={(close) => (
             <>
               <button

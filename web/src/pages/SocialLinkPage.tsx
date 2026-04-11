@@ -91,10 +91,6 @@ export default function SocialLinkPage() {
           username={user?.username || "Not logged in"}
           avatarSrc={avatarSrc}
           walletId={user?.walletId}
-          onConnectWallet={() => {
-            // eslint-disable-next-line no-console
-            console.log("Connect wallet clicked");
-          }}
           subtextWhenEmpty="No verification photo on file"
           subtextWhenPhoto="Verification capture"
           footer={(close) => (

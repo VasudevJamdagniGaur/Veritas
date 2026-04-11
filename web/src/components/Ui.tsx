@@ -200,17 +200,14 @@ export function ProfileMenu({
   username,
   avatarSrc,
   walletId,
-  onConnectWallet,
   subtextWhenEmpty = "Capture & Verify to save your photo here",
   subtextWhenPhoto = "Verification capture",
   footer,
 }: {
   username: string;
   avatarSrc: string;
-  /** Veritas Wallet ID shown in profile after signup */
+  /** Unique 24-character Veritas-issued wallet ID (from server at signup) */
   walletId?: string;
-  /** Optional web3 / chain wallet connect (shown under Veritas Wallet ID) */
-  onConnectWallet?: () => void;
   subtextWhenEmpty?: string;
   subtextWhenPhoto?: string;
   footer?: (close: () => void) => React.ReactNode;
@@ -274,37 +271,28 @@ export function ProfileMenu({
             </div>
             <div className="mt-3 text-sm font-semibold text-white">{username}</div>
             <p className="mt-1 text-xs text-gray-400">{hasPhoto ? subtextWhenPhoto : subtextWhenEmpty}</p>
-            {walletId ? (
-              <div className="mt-3 w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-left">
-                <div className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Veritas Wallet ID</div>
-                <div className="mt-1 break-all font-mono text-[11px] leading-snug text-pink-100">{walletId}</div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void navigator.clipboard?.writeText(walletId);
-                  }}
-                  className="mt-2 text-[11px] font-medium text-[#E91E63] hover:underline"
-                >
-                  Copy
-                </button>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="mt-4 w-full border-t border-white/10 pt-4 text-left">
-            <div className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Wallet</div>
-            <div className="mt-1 text-sm font-semibold text-white">Connect Wallet (Optional)</div>
-            <p className="mt-1 text-xs leading-snug text-gray-400">
-              Enable portable trust and on-chain identity.
-            </p>
-            <button
-              type="button"
-              onClick={() => onConnectWallet?.()}
-              className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-semibold text-gray-100 transition hover:border-[#E91E63]/40 hover:bg-white/10"
-            >
-              Connect Wallet
-            </button>
-            <p className="mt-2 text-[10px] text-gray-500">This action is optional and demo-safe.</p>
+            <div className="mt-3 w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-left">
+              <div className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Your Wallet ID</div>
+              <p className="mt-0.5 text-[10px] leading-snug text-gray-500">
+                Unique 24-character ID issued by Veritas at signup (letters, numbers, symbols).
+              </p>
+              {walletId ? (
+                <>
+                  <div className="mt-2 break-all font-mono text-[11px] leading-snug text-pink-100">{walletId}</div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard?.writeText(walletId);
+                    }}
+                    className="mt-2 text-[11px] font-medium text-[#E91E63] hover:underline"
+                  >
+                    Copy
+                  </button>
+                </>
+              ) : (
+                <p className="mt-2 text-xs text-gray-500">Syncing your ID…</p>
+              )}
+            </div>
           </div>
 
           {footer ? (

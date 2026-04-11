@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../lib/api";
 import { useApp } from "../state/appState";
 import { ProfileMenu, Shell } from "../components/Ui";
 
@@ -12,13 +11,6 @@ function scoreTone(score) {
   if (score >= 71) return { bar: "bg-emerald-500", pill: "bg-emerald-500/15 text-emerald-200 border-emerald-400/30" };
   if (score >= 40) return { bar: "bg-amber-500", pill: "bg-amber-500/15 text-amber-200 border-amber-400/30" };
   return { bar: "bg-rose-500", pill: "bg-rose-500/15 text-rose-200 border-rose-400/30" };
-}
-
-function botRiskLabel(botScore) {
-  // botScore: higher = worse
-  if (botScore >= 70) return { label: "High", tone: "bg-rose-500/15 text-rose-200 border-rose-400/30" };
-  if (botScore >= 40) return { label: "Medium", tone: "bg-amber-500/15 text-amber-200 border-amber-400/30" };
-  return { label: "Low", tone: "bg-emerald-500/15 text-emerald-200 border-emerald-400/30" };
 }
 
 function Pill({ children, className = "" }) {
@@ -51,10 +43,8 @@ function Progress({ value }) {
 
 export function TrustCard({ user }) {
   const trust = clamp(user.trustScore ?? 72, 0, 100);
-  const botScore = clamp(user.botScore ?? 25, 0, 100);
   const verified = Boolean(user.isHumanVerified);
   const trustT = scoreTone(trust);
-  const risk = botRiskLabel(botScore);
 
   return (
     <Card className="lg:col-span-2">
@@ -65,14 +55,13 @@ export function TrustCard({ user }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Pill className={`border ${trustT.pill}`}>⭐ Trust: {trust}</Pill>
-          <Pill className={`border ${risk.tone}`}>⚠ Bot Risk: {risk.label}</Pill>
           <Pill className={`border ${verified ? "bg-emerald-500/15 text-emerald-200 border-emerald-400/30" : "bg-white/5 text-gray-200 border-white/10"}`}>
             🟢 Human Verified: {verified ? "Yes" : "No"}
           </Pill>
         </div>
       </div>
 
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
+      <div className="mt-5">
         <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
           <div className="text-xs text-gray-400">Trust Score</div>
           <div className="mt-2 flex items-end justify-between gap-2">
@@ -83,18 +72,6 @@ export function TrustCard({ user }) {
             <Progress value={trust} />
           </div>
           <div className="mt-2 text-xs text-gray-400">Higher trust improves credibility scoring in the extension.</div>
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <div className="text-xs text-gray-400">Bot Risk</div>
-          <div className="mt-2 flex items-end justify-between gap-2">
-            <div className="text-4xl font-semibold text-white">{risk.label}</div>
-            <div className="text-xs text-gray-400">{botScore}/100</div>
-          </div>
-          <div className="mt-3">
-            <Progress value={100 - botScore} />
-          </div>
-          <div className="mt-2 text-xs text-gray-400">Lower risk means more confidence you’re human.</div>
         </div>
       </div>
     </Card>
@@ -233,59 +210,14 @@ export function AccountCard({ user }) {
   );
 }
 
-export function RecentAnalysis({ posts }) {
-  return (
-    <Card className="lg:col-span-2">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-xs uppercase tracking-wide text-gray-400">Recent analysis</div>
-          <div className="mt-1 text-lg font-semibold text-white">Latest credibility checks</div>
-        </div>
-        <button
-          type="button"
-          onClick={() => console.log("RecentAnalysis: refresh")}
-          className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-gray-200 transition hover:border-white/20 hover:bg-black/30"
-        >
-          Refresh
-        </button>
-      </div>
-
-      <div className="mt-4 grid gap-3">
-        {posts.map((p, idx) => {
-          const score = clamp(p.score ?? p.finalScore ?? 0, 0, 100);
-          const t = scoreTone(score);
-          const icon = score >= 70 ? "✅" : score >= 40 ? "⚠️" : "❌";
-          return (
-            <div key={p._id || idx} className="rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:border-white/20">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="truncate text-sm text-gray-100">{p.content}</div>
-                  <div className="mt-1 text-xs text-gray-400">Credibility score</div>
-                </div>
-                <Pill className={`border ${t.pill}`}>
-                  {icon} {score}%
-                </Pill>
-              </div>
-            </div>
-          );
-        })}
-        {posts.length === 0 ? <div className="text-sm text-gray-400">No recent analysis yet.</div> : null}
-      </div>
-    </Card>
-  );
-}
-
 export default function Dashboard() {
   const nav = useNavigate();
   const { user, logout, refreshUser } = useApp();
-  const [posts, setPosts] = useState([]);
 
   const mockUser = useMemo(
     () => ({
       username: "verified_user",
       trustScore: 72,
-      botScore: 25,
-      botRisk: "Low",
       isHumanVerified: true,
       twitter: "@verified_user",
     }),
@@ -304,28 +236,6 @@ export default function Dashboard() {
     refreshUser().catch(() => {});
   }, [user?._id, refreshUser]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const resp = await api.get("/posts");
-        if (cancelled) return;
-        const raw = resp.data?.posts || [];
-        const mapped = raw.slice(0, 6).map((p) => ({ ...p, score: p.finalScore }));
-        setPosts(mapped);
-      } catch {
-        // fallback posts for demo
-        setPosts([
-          { content: "Breaking news...", score: 32 },
-          { content: "Official update...", score: 85 },
-        ]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   return (
     <Shell>
       <div className="mb-6">
@@ -341,10 +251,6 @@ export default function Dashboard() {
             username={viewUser.username}
             avatarSrc={user?.faceImageUrl || user?.faceCaptureDataUrl || ""}
             walletId={user?.walletId}
-            onConnectWallet={() => {
-              // eslint-disable-next-line no-console
-              console.log("Connect wallet clicked");
-            }}
             subtextWhenEmpty="No verification photo on file"
             subtextWhenPhoto="Verification capture"
             footer={(close) => (
@@ -368,7 +274,6 @@ export default function Dashboard() {
         <TrustCard user={viewUser} />
         <ExtensionCard onInstall={() => { console.log("Install extension clicked"); nav("/instructions"); }} />
         <AccountCard user={viewUser} />
-        <RecentAnalysis posts={posts} />
       </div>
     </Shell>
   );

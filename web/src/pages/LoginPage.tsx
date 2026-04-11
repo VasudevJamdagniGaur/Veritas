@@ -4,6 +4,10 @@ import { api, type User } from "../lib/api";
 import { useApp } from "../state/appState";
 import { Card, Input, Shell } from "../components/Ui";
 
+/** Served from `web/public/media/`. Order: A → B → A → … at 0.4× */
+const base = import.meta.env.BASE_URL;
+const OPENING_BG_VIDEOS = [`${base}media/hero-rotate-a.mp4`, `${base}media/hero-rotate-b.mp4`] as const;
+
 export default function LoginPage() {
   const nav = useNavigate();
   const { user, setUser } = useApp();
@@ -53,7 +57,7 @@ export default function LoginPage() {
   };
 
   return (
-    <Shell>
+    <Shell backgroundVideos={OPENING_BG_VIDEOS}>
       <div className="mb-6 flex items-center justify-between">
         <div>
           <div className="text-sm text-gray-400">Veritas</div>

@@ -7,7 +7,7 @@ const router = express.Router();
 
 router.post("/", async (req, res) => {
   const schema = z.object({
-    text: z.string().min(80).max(120_000),
+    text: z.string().min(40).max(120_000),
     url: z.string().max(4000).optional(),
     title: z.string().max(500).optional(),
   });

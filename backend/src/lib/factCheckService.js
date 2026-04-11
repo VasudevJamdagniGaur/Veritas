@@ -3,33 +3,36 @@ const { fetchAllNewsSources } = require("./newsFetchers");
 const { resolveOpenAiApiKey } = require("./env");
 
 function parseJsonFromAssistantContent(content) {
-  const s = String(content || "");
+  let s = String(content || "").trim();
+  const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(s);
+  if (fence) s = fence[1].trim();
   const first = s.indexOf("{");
   const last = s.lastIndexOf("}");
-  if (first === -1 || last === -1) throw new Error("No JSON in model response");
+  if (first === -1 || last === -1 || last < first) throw new Error("No JSON in model response");
   return JSON.parse(s.slice(first, last + 1));
 }
 
-async function openAiChatJson({ apiKey, model, system, user, maxTokens = 1200 }) {
-  const resp = await axios.post(
-    "https://api.openai.com/v1/chat/completions",
-    {
-      model,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      temperature: 0.2,
-      max_tokens: maxTokens,
+async function openAiChatJson({ apiKey, model, system, user, maxTokens = 1200, jsonObjectMode = true }) {
+  const body = {
+    model,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    temperature: 0.25,
+    max_tokens: maxTokens,
+  };
+  if (jsonObjectMode && /gpt-4|gpt-3\.5|gpt-5|o1|o3|o4/i.test(model)) {
+    body.response_format = { type: "json_object" };
+  }
+
+  const resp = await axios.post("https://api.openai.com/v1/chat/completions", body, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
     },
-    {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      timeout: 90000,
-    }
-  );
+    timeout: 120000,
+  });
   const content = resp.data?.choices?.[0]?.message?.content ?? "";
   return parseJsonFromAssistantContent(content);
 }
@@ -38,12 +41,14 @@ function mockFactCheck(articleText) {
   const n = String(articleText || "").length;
   const truthScore = 40 + (n % 45);
   return {
-    mainClaim: "Mock: set OPENAI_API_KEY and optional news API keys for live fact-checking.",
+    contentLabel: "API not configured",
+    mainClaim:
+      "Configure OPENAI_API_KEY in backend/.env and restart the server to get Community Notes–style context (satire vs fact vs misleading).",
     searchQueryUsed: "news",
     truthScore,
     verdict: "Unverified",
     explanation:
-      "This is a placeholder response. Configure OPENAI_API_KEY in backend/.env. Add NewsAPI, GNews, WorldNewsAPI, and/or TheNewsAPI keys for source retrieval.",
+      "This is a placeholder. Add OPENAI_API_KEY to backend/.env (see .env.example). Optional: NewsAPI / GNews keys improve source snippets.",
     sourceCounts: { newsapi: 0, gnews: 0, worldnews: 0, thenews: 0 },
     sourcesSample: [],
   };
@@ -65,18 +70,17 @@ function buildSourcesPayload(bundles) {
   return { text: lines.join("\n\n"), sample: sample.slice(0, 12) };
 }
 
-async function extractClaim({ apiKey, model, articleText, title, url }) {
-  const excerpt = String(articleText).slice(0, 14000);
+async function extractSearchKeywords({ apiKey, model, articleText, title, url }) {
+  const excerpt = String(articleText).slice(0, 12000);
   const sys =
-    "You extract the single most checkable factual claim from news-style text. Return strict JSON only.";
+    "You extract short news search keywords for fact-checking. Respond with JSON only. The user message will ask for JSON.";
   const user = [
-    "From the article below, output JSON:",
-    '{ "mainClaim": string (one concise claim to fact-check), "searchKeywords": string (3-10 words, optimized for news search, no quotes) }',
+    "Return JSON with keys: mainClaim (short), searchKeywords (3-12 words, no quotes, good for news search).",
     "",
     `Page title: ${String(title || "").slice(0, 300)}`,
     `URL: ${String(url || "").slice(0, 800)}`,
     "",
-    "ARTICLE:",
+    "POST:",
     excerpt,
   ].join("\n");
 
@@ -85,49 +89,55 @@ async function extractClaim({ apiKey, model, articleText, title, url }) {
     model,
     system: sys,
     user,
-    maxTokens: 500,
+    maxTokens: 400,
+    jsonObjectMode: true,
   });
   const mainClaim = String(json.mainClaim || "").trim();
   const searchKeywords = String(json.searchKeywords || json.searchQuery || "").trim() || mainClaim.slice(0, 120);
-  if (!mainClaim) throw new Error("Could not extract a main claim");
-  return { mainClaim, searchKeywords: searchKeywords.slice(0, 420) };
+  return { mainClaim: mainClaim || excerpt.slice(0, 200), searchKeywords: searchKeywords.slice(0, 420) };
 }
 
-async function verifyClaim({
-  apiKey,
-  model,
-  mainClaim,
-  sourcesBlock,
-  hadSources,
-}) {
-  const sys =
-    "You are a careful fact-checking assistant. Compare the claim to the source snippets. Return strict JSON only. Be explicit when evidence is thin.";
+const UNIFIED_SYSTEM = `You help readers understand social posts in the style of X (Twitter) Community Notes: first classify the KIND of content, then explain—never echo the post verbatim.
+
+Hard rules:
+- Do NOT paste or lightly rephrase the post as your analysis. No more than 5 consecutive words copied from the post.
+- "mainClaim" must be one sentence in neutral, analytical voice: what the post is doing (e.g. joke, satire, serious claim, opinion, rumor) and the topic—written as if explaining to someone who has not read the post.
+- If the post is satirical, humorous, or clearly fictional, say so explicitly; truthScore should be low as "literal news accuracy" and verdict often "Unverified"—that is correct for jokes.
+
+Respond with JSON only (no markdown). Keys:
+- "contentLabel": string — a short reader-facing label, pick the closest: "Satire or humor" | "Opinion or commentary" | "Likely factual" | "Likely misleading or false" | "Unverified or rumor" | "Mixed"
+- "mainClaim": string — one sentence analytical summary (NOT a quote of the post).
+- "truthScore": number 0-100 — if the post is satire/joke, use a LOW score for literal factual accuracy (the scenario is not real news). Use higher scores only for posts making real factual claims that check out.
+- "verdict": exactly one of: "Likely True", "Mixed / Unclear", "Likely False", "Unverified"
+- "explanation": string — 3 to 7 sentences like a Community Note: name whether it is satire/fake news/fact/opinion, why, and what a reader should know. Cite [n] for snippets if provided. If no sources, rely on reasoning and label satire clearly.`;
+
+
+async function unifiedFactCheck({ apiKey, model, articleText, title, url, sourcesBlock, hadSources }) {
+  const excerpt = String(articleText).trim().slice(0, 14000);
   const user = [
-    "CLAIM TO VERIFY:",
-    mainClaim,
+    "Classify this post (satire vs serious news vs opinion vs rumor) and explain for readers. Remember: do not repeat the post text as the analysis.",
     "",
-    hadSources ? "INDEPENDENT SOURCE SNIPPETS (may be incomplete):" : "NO EXTERNAL SOURCES WERE RETRIEVED — rely on general knowledge cautiously and lower confidence.",
+    `Page title: ${String(title || "").slice(0, 400)}`,
+    `URL: ${String(url || "").slice(0, 1000)}`,
+    "",
+    "POST TEXT:",
+    excerpt,
+    "",
+    hadSources
+      ? "INDEPENDENT SOURCE SNIPPETS (use [n] to refer to them in your explanation):"
+      : "NO INDEPENDENT SOURCES WERE RETRIEVED — assess from the post and careful general reasoning; prefer lower confidence or Unverified when needed.",
+    "",
     sourcesBlock || "(none)",
-    "",
-    "Return JSON:",
-    '{ "truthScore": number (0-100, how well supported / accurate the claim appears),',
-    '"verdict": "Likely True" | "Mixed / Unclear" | "Likely False" | "Unverified",',
-    '"explanation": string (2-5 sentences, cite source numbers [n] when used)"',
   ].join("\n");
 
-  const json = await openAiChatJson({
+  return openAiChatJson({
     apiKey,
     model,
-    system: sys,
+    system: UNIFIED_SYSTEM,
     user,
-    maxTokens: 900,
+    maxTokens: 1400,
+    jsonObjectMode: true,
   });
-  let truthScore = Math.round(Number(json.truthScore));
-  if (!Number.isFinite(truthScore)) truthScore = 50;
-  truthScore = Math.max(0, Math.min(100, truthScore));
-  const verdict = String(json.verdict || "Unverified").trim();
-  const explanation = String(json.explanation || "").trim() || "No explanation returned.";
-  return { truthScore, verdict, explanation };
 }
 
 function normalizeVerdict(v) {
@@ -136,6 +146,24 @@ function normalizeVerdict(v) {
   if (s.includes("likely false")) return "Likely False";
   if (s.includes("mixed") || s.includes("unclear")) return "Mixed / Unclear";
   return "Unverified";
+}
+
+function normalizeContentLabel(s) {
+  const t = String(s || "")
+    .trim()
+    .slice(0, 120);
+  return t || "Context";
+}
+
+function normalizeUnifiedJson(json) {
+  let truthScore = Math.round(Number(json.truthScore));
+  if (!Number.isFinite(truthScore)) truthScore = 50;
+  truthScore = Math.max(0, Math.min(100, truthScore));
+  const mainClaim = String(json.mainClaim || "").trim() || "Context could not be summarized.";
+  const contentLabel = normalizeContentLabel(json.contentLabel);
+  const verdict = normalizeVerdict(json.verdict);
+  const explanation = String(json.explanation || "").trim() || "No explanation returned.";
+  return { mainClaim, contentLabel, truthScore, verdict, explanation };
 }
 
 /**
@@ -154,16 +182,17 @@ async function runFactCheck({ env, text, url, title }) {
   }
 
   const articleText = String(text || "").trim();
-  let mainClaim;
-  let searchKeywords;
+
+  let searchKeywords = articleText.slice(0, 150);
+  let keywordMain = articleText.slice(0, 400);
 
   try {
-    const ex = await extractClaim({ apiKey, model, articleText, title, url });
-    mainClaim = ex.mainClaim;
+    const ex = await extractSearchKeywords({ apiKey, model, articleText, title, url });
     searchKeywords = ex.searchKeywords;
-  } catch {
-    mainClaim = articleText.slice(0, 400);
-    searchKeywords = articleText.slice(0, 120);
+    keywordMain = ex.mainClaim;
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn("[fact-check] keyword extraction fallback:", e?.message || e);
   }
 
   let bundles;
@@ -181,34 +210,70 @@ async function runFactCheck({ env, text, url, title }) {
   };
 
   const { text: sourcesBlock, sample: sourcesSample } = buildSourcesPayload(bundles);
-  const hadSources = sourceCounts.newsapi + sourceCounts.gnews + sourceCounts.worldnews + sourceCounts.thenews > 0;
+  const hadSources =
+    sourceCounts.newsapi + sourceCounts.gnews + sourceCounts.worldnews + sourceCounts.thenews > 0;
 
-  let verification;
   try {
-    verification = await verifyClaim({
+    const raw = await unifiedFactCheck({
       apiKey,
       model,
-      mainClaim,
+      articleText,
+      title,
+      url,
       sourcesBlock,
       hadSources,
     });
-  } catch {
-    verification = {
-      truthScore: 50,
-      verdict: "Unverified",
-      explanation: "Verification step failed. Try again or check API configuration.",
+    const u = normalizeUnifiedJson(raw);
+    return {
+      contentLabel: u.contentLabel,
+      mainClaim: u.mainClaim,
+      searchQueryUsed: searchKeywords,
+      truthScore: u.truthScore,
+      verdict: u.verdict,
+      explanation: u.explanation,
+      sourceCounts,
+      sourcesSample,
     };
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn("[fact-check] unified call failed, retrying without sources context:", e?.message || e);
   }
 
-  return {
-    mainClaim,
-    searchQueryUsed: searchKeywords,
-    truthScore: verification.truthScore,
-    verdict: normalizeVerdict(verification.verdict),
-    explanation: verification.explanation,
-    sourceCounts,
-    sourcesSample,
-  };
+  try {
+    const raw = await unifiedFactCheck({
+      apiKey,
+      model,
+      articleText,
+      title,
+      url,
+      sourcesBlock: "",
+      hadSources: false,
+    });
+    const u = normalizeUnifiedJson(raw);
+    return {
+      contentLabel: u.contentLabel,
+      mainClaim: u.mainClaim,
+      searchQueryUsed: searchKeywords,
+      truthScore: u.truthScore,
+      verdict: u.verdict,
+      explanation: u.explanation,
+      sourceCounts,
+      sourcesSample,
+    };
+  } catch (e2) {
+    // eslint-disable-next-line no-console
+    console.error("[fact-check] failed:", e2?.message || e2);
+    return {
+      contentLabel: "Error",
+      mainClaim: "Analysis unavailable for this post.",
+      searchQueryUsed: searchKeywords,
+      truthScore: 50,
+      verdict: "Unverified",
+      explanation: `Fact-check could not complete: ${String(e2?.message || e2).slice(0, 400)}. Confirm OPENAI_API_KEY and model name in backend/.env.`,
+      sourceCounts,
+      sourcesSample,
+    };
+  }
 }
 
 module.exports = { runFactCheck, mockFactCheck };

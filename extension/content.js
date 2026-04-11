@@ -627,10 +627,19 @@
       .veritas-fc-popover.veritas-fc-popover--open {
         display: block;
       }
+      .veritas-factcheck-nature {
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #a5b4fc;
+        margin-bottom: 6px;
+      }
       .veritas-factcheck-claim {
-        color: #bae6fd;
-        font-weight: 600;
+        color: #e0f2fe;
+        font-weight: 500;
         margin-bottom: 8px;
+        line-height: 1.4;
       }
       .veritas-factcheck-row {
         display: flex;
@@ -1977,13 +1986,13 @@
         return;
       }
       panel.classList.add("veritas-fc-popover--open");
-      panel.innerHTML = '<div class="veritas-factcheck-loading">Checking claim & sources…</div>';
+      panel.innerHTML = '<div class="veritas-factcheck-loading">Analyzing post (satire vs fact vs opinion)…</div>';
       btn.disabled = true;
       try {
         const text = extractArticleTextFromPost(articleEl);
-        if (text.length < 80) {
+        if (text.length < 40) {
           panel.innerHTML =
-            '<div class="veritas-factcheck-err">Not enough text in this post (need ~80+ characters).</div>';
+            '<div class="veritas-factcheck-err">Not enough text in this post (need at least ~40 characters).</div>';
           return;
         }
         const data = await factCheckClient({
@@ -2437,6 +2446,9 @@
   function renderFactCheckResult(panel, data) {
     const score = clamp(Math.round(Number(data.truthScore)), 0, 100);
     panel.textContent = "";
+    const natureEl = document.createElement("div");
+    natureEl.className = "veritas-factcheck-nature";
+    natureEl.textContent = String(data.contentLabel || "Context");
     const claimEl = document.createElement("div");
     claimEl.className = "veritas-factcheck-claim";
     claimEl.textContent = String(data.mainClaim || "");
@@ -2475,6 +2487,7 @@
       linkWrap.appendChild(a);
     }
 
+    panel.appendChild(natureEl);
     panel.appendChild(claimEl);
     panel.appendChild(row);
     panel.appendChild(explP);

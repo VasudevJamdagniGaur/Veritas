@@ -317,7 +317,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
-  if (t === "VERITAS_FACT_CHECK" && typeof msg.text === "string" && msg.text.length >= 80) {
+  if (t === "VERITAS_FACT_CHECK" && typeof msg.text === "string" && msg.text.length >= 40) {
     factCheckViaApi({ text: msg.text, url: msg.url, title: msg.title })
       .then((data) => sendResponse({ ok: true, data }))
       .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));

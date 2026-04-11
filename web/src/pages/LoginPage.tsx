@@ -79,8 +79,7 @@ export default function LoginPage() {
           Trust Layer for Social Media
         </p>
         <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-gray-300 sm:text-base">
-          Prove you’re human, build a trust score, and get credibility badges directly in your feed via the Chrome
-          extension.
+          Prove you’re human, build a trust score, and get credibility badges directly in your feed.
         </p>
       </div>
 

@@ -120,7 +120,7 @@ export default function FaceVerificationPage() {
           return;
         }
       } else {
-        setVerifyErr("No session found. Go back and enter a username first.");
+        setVerifyErr("No session found. Go back and sign in with Google first.");
         return;
       }
     }

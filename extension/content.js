@@ -187,6 +187,30 @@
         opacity: 0.55;
         cursor: wait;
       }
+      .veritas-check-ai-btn--real {
+        border-color: rgba(34, 197, 94, 0.55) !important;
+        background: rgba(34, 197, 94, 0.14) !important;
+        color: transparent;
+        padding: 6px 10px;
+        min-width: 38px;
+        min-height: 32px;
+      }
+      .veritas-check-ai-btn--ai {
+        border-color: rgba(239, 68, 68, 0.6) !important;
+        background: rgba(239, 68, 68, 0.14) !important;
+        color: transparent;
+        padding: 6px 10px;
+        min-width: 38px;
+        min-height: 32px;
+      }
+      .veritas-check-ai-btn--real:hover:not(:disabled),
+      .veritas-check-ai-btn--ai:hover:not(:disabled) {
+        filter: brightness(1.08);
+      }
+      .veritas-check-ai-ic {
+        display: block;
+        margin: 0 auto;
+      }
       .veritas-check-ai-panel {
         margin-top: 8px;
       }
@@ -1216,6 +1240,36 @@
     panel.appendChild(card);
   }
 
+  function resetCheckAiButton(btn) {
+    btn.classList.remove("veritas-check-ai-btn--real", "veritas-check-ai-btn--ai");
+    btn.textContent = "Check AI";
+    btn.removeAttribute("aria-label");
+    btn.title = "";
+  }
+
+  function setCheckAiButtonAfterResult(btn, result) {
+    const isAi =
+      result &&
+      (result.verdict === "AI-generated" ||
+        String(result.verdict || "")
+          .toLowerCase()
+          .includes("ai-generated"));
+    btn.classList.remove("veritas-check-ai-btn--real", "veritas-check-ai-btn--ai");
+    if (isAi) {
+      btn.classList.add("veritas-check-ai-btn--ai");
+      btn.innerHTML =
+        '<svg class="veritas-check-ai-ic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="#f87171" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
+      btn.title = "Veritas: likely AI-generated — click to check again";
+      btn.setAttribute("aria-label", "Likely AI-generated. Click to check again.");
+    } else {
+      btn.classList.add("veritas-check-ai-btn--real");
+      btn.innerHTML =
+        '<svg class="veritas-check-ai-ic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none"><path stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M20 6L9 17l-5-5"/></svg>';
+      btn.title = "Veritas: likely not AI-generated — click to check again";
+      btn.setAttribute("aria-label", "Likely not AI-generated. Click to check again.");
+    }
+  }
+
   async function checkAiAnalyze(payload) {
     if (!payload) {
       throw new Error("No capturable image or video in this post.");
@@ -1247,34 +1301,22 @@
     btn.className = "veritas-check-ai-btn";
     btn.textContent = "Check AI";
     btn.addEventListener("click", async () => {
+      resetCheckAiButton(btn);
       const panel = mountCheckAiPanel(host);
       panel.innerHTML =
         '<div class="veritas-check-ai-card veritas-check-ai-card--loading">Analyzing image…</div>';
       btn.disabled = true;
-      if (isX) {
-        host.querySelectorAll(".veritas-card").forEach((c) => c.remove());
-      }
       try {
         const payload = captureMediaForCheckAi(captureRoot);
         const result = await checkAiAnalyze(payload);
         renderCheckAiResult(panel, result);
+        setCheckAiButtonAfterResult(btn, result);
       } catch (e) {
         const msg = escapeHtml(String(e?.message || e));
         panel.innerHTML = `<div class="veritas-check-ai-card veritas-check-ai-card--err">${msg}</div>`;
+        resetCheckAiButton(btn);
       } finally {
         btn.disabled = false;
-      }
-      if (isX) {
-        const text = postTextFromElement(captureRoot);
-        if (text && text.length >= 10) {
-          try {
-            const tr = await analyze(text);
-            const card = renderCard(tr);
-            host.appendChild(card);
-          } catch {
-            /* backend down */
-          }
-        }
       }
     });
     row.appendChild(btn);
@@ -1542,20 +1584,17 @@
     ensureFactCheckLogoOnPost(el);
 
     const host = ensurePostToolbarHost(el);
-    attachCheckAiToHost(host, el);
+    if (!isX) attachCheckAiToHost(host, el);
 
     const text = postTextFromElement(el);
     if (!text || text.length < 10) return;
-
-    /* X/Twitter: do not auto-show Veritas text scores; they appear only after "Check AI" is pressed. */
-    if (isX) return;
 
     try {
       const result = await analyze(text);
       const card = renderCard(result);
       host.appendChild(card);
     } catch {
-      /* backend down — Check AI still available */
+      /* backend down */
     }
   }
 

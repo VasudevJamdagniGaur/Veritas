@@ -132,6 +132,53 @@ function tryInstagramPlainText(raw: string): ParsedSocialForApi | null {
   return { instagramHandle: h.toLowerCase() };
 }
 
+/** Plain Reddit username or `u/name` (no full URL). */
+function tryRedditPlainText(raw: string): ParsedSocialForApi | null {
+  const t = cleanPaste(raw);
+  if (!t || /:\/\//.test(t) || /\.[a-z]{2,}(\/|$)/i.test(t)) return null;
+  let u = t.replace(/^@/, "").trim();
+  if (/^u\//i.test(u)) u = u.slice(2).trim();
+  if (!/^[A-Za-z0-9_-]{3,40}$/.test(u)) return null;
+  return { redditUsername: u };
+}
+
+/** Plain X handle like `@elonmusk` or `elonmusk` (no URL). */
+function tryXPlainText(raw: string): ParsedSocialForApi | null {
+  const t = cleanPaste(raw);
+  if (!t || /:\/\//.test(t) || /\.[a-z]{2,}(\/|$)/i.test(t)) return null;
+  const h = t.replace(/^@/, "").trim();
+  if (!/^[\w]{1,20}$/.test(h)) return null;
+  return { xHandle: h };
+}
+
+/**
+ * LinkedIn public URL slug only (hyphenated name or long slug); avoids short random words.
+ */
+function tryLinkedInPlainSlug(raw: string): ParsedSocialForApi | null {
+  const t = cleanPaste(raw);
+  if (!t || /:\/\//.test(t) || /linkedin/i.test(t)) return null;
+  const slug = t.trim().replace(/\s+/g, "-").replace(/^\/+|\/+$/g, "");
+  if (!slug || /[^a-zA-Z0-9-]/.test(slug)) return null;
+  const hyphen = slug.includes("-");
+  if (!hyphen && slug.length < 8) return null;
+  if (slug.length < 3 || slug.length > 120) return null;
+  if (!/^[a-zA-Z0-9]/.test(slug) || !/[a-zA-Z0-9]$/.test(slug)) return null;
+  return { linkedinUrl: `https://www.linkedin.com/in/${encodeURIComponent(slug)}/` };
+}
+
+/**
+ * Human-readable line when a paste parses (URLs or plain handles).
+ */
+export function getExtractionPreview(platform: SocialPlatformKey, raw: string): string | null {
+  const p = parsePastedSocialLink(platform, raw);
+  if (!p || "error" in p) return null;
+  if (p.redditUsername) return `We’ll save Reddit user: u/${p.redditUsername}`;
+  if (p.instagramHandle) return `We’ll save Instagram: @${p.instagramHandle}`;
+  if (p.xHandle) return `We’ll save X: @${p.xHandle}`;
+  if (p.linkedinUrl) return `We’ll save this LinkedIn profile`;
+  return null;
+}
+
 /**
  * Extracts profile identifiers from a pasted URL for the given platform.
  * Returns `{ error: string }` if the link cannot be parsed.
@@ -144,11 +191,32 @@ export function parsePastedSocialLink(
     const plain = tryInstagramPlainText(raw);
     if (plain) return plain;
   }
+  if (platform === "reddit") {
+    const plain = tryRedditPlainText(raw);
+    if (plain) return plain;
+  }
+  if (platform === "x") {
+    const plain = tryXPlainText(raw);
+    if (plain) return plain;
+  }
+  if (platform === "linkedin") {
+    const plain = tryLinkedInPlainSlug(raw);
+    if (plain) return plain;
+  }
 
   const url = toUrl(raw);
   if (!url) {
     if (platform === "instagram") {
       return { error: "Paste your profile URL (e.g. instagram.com/username) or your @username." };
+    }
+    if (platform === "reddit") {
+      return { error: "Paste a reddit.com profile URL or a username (e.g. spez or u/spez)." };
+    }
+    if (platform === "x") {
+      return { error: "Paste an x.com/twitter.com profile URL or your @handle." };
+    }
+    if (platform === "linkedin") {
+      return { error: "Paste your LinkedIn profile URL or the /in/… slug from the address bar." };
     }
     return { error: "Paste a valid link or URL." };
   }

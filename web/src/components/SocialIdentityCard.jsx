@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { api } from "../lib/api";
-import { parsePastedSocialLink } from "../lib/parseSocialProfileUrl";
+import { getExtractionPreview, parsePastedSocialLink } from "../lib/parseSocialProfileUrl";
 import { Card } from "./Ui";
 
 function Pill({ children, className = "" }) {
@@ -32,6 +32,8 @@ function SocialConnectRow({ platformKey, label, connected, detail, userId, onLin
   const [input, setInput] = useState("");
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const extractionPreview = useMemo(() => getExtractionPreview(platformKey, input), [platformKey, input]);
 
   const linkAccount = async () => {
     setErr("");
@@ -101,9 +103,12 @@ function SocialConnectRow({ platformKey, label, connected, detail, userId, onLin
             autoComplete="url"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Paste profile URL or @username"
+            placeholder="Profile URL, @handle, or username"
             className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-[#E91E63]/50"
           />
+          {extractionPreview ? (
+            <div className="text-xs leading-snug text-emerald-300/90">{extractionPreview}</div>
+          ) : null}
           {err ? <div className="text-xs text-rose-300">{err}</div> : null}
           <button
             type="button"

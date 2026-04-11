@@ -185,11 +185,10 @@ export default function FaceVerificationPage() {
             {bootErr ? <div className="mt-2 text-sm text-rose-300">{bootErr}</div> : null}
             {streamErr ? <div className="mt-2 text-sm text-rose-300">{streamErr}</div> : null}
             {verifyErr ? <div className="mt-2 text-sm text-rose-300">{verifyErr}</div> : null}
-            <div className="mt-4 flex items-center gap-3">
+            <div className="mt-4">
               <Button onClick={onVerify} disabled={!canVerify || loading}>
                 {loading ? "Verifying…" : "Capture & Verify"}
               </Button>
-              <span className="text-xs text-gray-400">This sets `isHumanVerified = true`.</span>
             </div>
             <canvas ref={canvasRef} className="hidden" />
           </Card>

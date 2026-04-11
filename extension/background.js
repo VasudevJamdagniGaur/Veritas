@@ -182,6 +182,52 @@ function checkAiViaApi(payload) {
   return run();
 }
 
+function amazonInlineScoresViaApi(reviews) {
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), 90000);
+  return fetch(`${VERITAS_API_BASE}/amazon-review-scores`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reviews }),
+    signal: ctrl.signal,
+  })
+    .then(async (resp) => {
+      clearTimeout(tid);
+      if (!resp.ok) {
+        const errBody = await resp.text().catch(() => "");
+        throw new Error(`Amazon review scores failed: ${resp.status}${errBody ? ` ${errBody.slice(0, 220)}` : ""}`);
+      }
+      return resp.json();
+    })
+    .catch((e) => {
+      clearTimeout(tid);
+      throw e;
+    });
+}
+
+function amazonReviewTrustViaApi(reviewsText) {
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), 90000);
+  return fetch(`${VERITAS_API_BASE}/amazon-review-trust`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reviewsText: String(reviewsText) }),
+    signal: ctrl.signal,
+  })
+    .then(async (resp) => {
+      clearTimeout(tid);
+      if (!resp.ok) {
+        const errBody = await resp.text().catch(() => "");
+        throw new Error(`Amazon review trust failed: ${resp.status}${errBody ? ` ${errBody.slice(0, 220)}` : ""}`);
+      }
+      return resp.json();
+    })
+    .catch((e) => {
+      clearTimeout(tid);
+      throw e;
+    });
+}
+
 function analyzeTextViaApi(text, username, userId, source) {
   const ctrl = new AbortController();
   const tid = setTimeout(() => ctrl.abort(), 25000);
@@ -225,6 +271,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       imageBase64: msg.imageBase64,
       imageUrl: msg.imageUrl,
     })
+      .then((data) => sendResponse({ ok: true, data }))
+      .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+    return true;
+  }
+
+  if (t === "VERITAS_AMAZON_REVIEW_TRUST" && typeof msg.reviewsText === "string" && msg.reviewsText.length >= 40) {
+    amazonReviewTrustViaApi(msg.reviewsText)
+      .then((data) => sendResponse({ ok: true, data }))
+      .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+    return true;
+  }
+
+  if (t === "VERITAS_AMAZON_INLINE_SCORES" && Array.isArray(msg.reviews) && msg.reviews.length > 0) {
+    amazonInlineScoresViaApi(msg.reviews)
       .then((data) => sendResponse({ ok: true, data }))
       .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
     return true;

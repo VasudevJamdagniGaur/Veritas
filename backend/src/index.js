@@ -13,7 +13,7 @@ async function main() {
   if (!openaiKey) {
     // eslint-disable-next-line no-console
     console.warn(
-      "[Veritas] No OpenAI key found after loading env files (project .env + backend/.env). Set OPENAI_API_KEY for /api/analyze and /api/check-ai, restart this server."
+      "[Veritas] No OpenAI key found after loading env files (project .env + backend/.env). Set OPENAI_API_KEY for /api/analyze, /api/check-ai, and /api/amazon-review-trust, restart this server."
     );
   } else {
     // eslint-disable-next-line no-console
@@ -60,6 +60,10 @@ async function main() {
     console.log(`  Text analyze: POST http://localhost:${env.PORT}/api/analyze`);
     // eslint-disable-next-line no-console
     console.log(`  Check AI (vision): POST http://localhost:${env.PORT}/api/check-ai`);
+    // eslint-disable-next-line no-console
+    console.log(`  Amazon review trust: POST http://localhost:${env.PORT}/api/amazon-review-trust`);
+    // eslint-disable-next-line no-console
+    console.log(`  Amazon per-review scores: POST http://localhost:${env.PORT}/api/amazon-review-scores`);
     // eslint-disable-next-line no-console
     if (env.PORT === 5000) console.log("Backend running on port 5000");
   });

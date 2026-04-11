@@ -9,6 +9,7 @@
   const SOCIAL_TAG = "data-veritas-account-badge";
 
   let reelVideoIdSeq = 0;
+  let amazonReviewUid = 0;
 
   const host =
     typeof location !== "undefined" ? location.hostname.replace(/^www\./, "") : "";
@@ -19,6 +20,25 @@
   const isX = host === "x.com" || host === "twitter.com";
   const isLinkedIn = host === "linkedin.com";
   const isReddit = host === "reddit.com" || host === "old.reddit.com" || host === "new.reddit.com";
+
+  /** Amazon retail only (not AWS console). Re-check on each call for SPA navigation. */
+  function isAmazonRetailHost() {
+    if (typeof location === "undefined") return false;
+    const h = (location.hostname || "").toLowerCase();
+    if (/amazonaws\.com$|aws\.amazon\.com$/i.test(h)) return false;
+    return h === "amazon.com" || /\.amazon\./.test(h);
+  }
+
+  function isAmazonProductReviewsPage() {
+    if (!isAmazonRetailHost()) return false;
+    const p = (location.pathname || "").toLowerCase();
+    return (
+      p.includes("/dp/") ||
+      p.includes("/gp/product/") ||
+      p.includes("/product-reviews/") ||
+      p.includes("/dp/product/")
+    );
+  }
 
   /**
    * Extension messaging API (Chrome `chrome`, Firefox `browser`). Do not require `runtime.id` —
@@ -270,6 +290,139 @@
       .veritas-ig-reel-overlay .veritas-check-ai-btn {
         box-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
         backdrop-filter: blur(6px);
+      }
+
+      /* Amazon-only: review trust dock */
+      .veritas-amazon-dock {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 2147483640;
+        max-width: min(400px, calc(100vw - 28px));
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      }
+      .veritas-amazon-dock-inner {
+        background: #fffefb;
+        border: 1px solid rgba(124, 58, 237, 0.28);
+        border-radius: 16px;
+        padding: 12px 14px;
+        box-shadow: 0 12px 36px rgba(15, 23, 42, 0.18);
+        color: #1f2937;
+      }
+      .veritas-amazon-dock-title {
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #6b21a8;
+        margin-bottom: 8px;
+      }
+      .veritas-amazon-dock-btn {
+        appearance: none;
+        width: 100%;
+        border: 1px solid rgba(124, 58, 237, 0.45);
+        background: linear-gradient(180deg, rgba(124, 58, 237, 0.12), rgba(124, 58, 237, 0.06));
+        color: #4c1d95;
+        font-size: 13px;
+        font-weight: 700;
+        padding: 10px 12px;
+        border-radius: 12px;
+        cursor: pointer;
+      }
+      .veritas-amazon-dock-btn:hover:not(:disabled) {
+        background: rgba(124, 58, 237, 0.16);
+      }
+      .veritas-amazon-dock-btn:disabled {
+        opacity: 0.55;
+        cursor: wait;
+      }
+      .veritas-amazon-dock-panel {
+        margin-top: 10px;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .veritas-amazon-loading {
+        color: #6b7280;
+        font-style: italic;
+      }
+      .veritas-amazon-err {
+        color: #b91c1c;
+      }
+      .veritas-amazon-result {
+        border-top: 1px solid rgba(0, 0, 0, 0.08);
+        padding-top: 10px;
+      }
+      .veritas-amazon-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+      .veritas-amazon-score {
+        font-size: 28px;
+        font-weight: 800;
+        color: #0f172a;
+      }
+      .veritas-amazon-verdict {
+        font-size: 12px;
+        font-weight: 800;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: #ede9fe;
+        color: #5b21b6;
+      }
+      .veritas-amazon-summary {
+        margin: 0 0 8px;
+        color: #374151;
+      }
+      .veritas-amazon-issues {
+        margin: 0;
+        padding-left: 18px;
+        color: #4b5563;
+      }
+
+      /* Per-review credibility next to reviewer name (Amazon only) */
+      .veritas-amazon-inline-score {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.75rem;
+        margin-left: 8px;
+        padding: 1px 7px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 800;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+        vertical-align: middle;
+        line-height: 1.35;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        background: #f3f4f6;
+        color: #111827;
+      }
+      .veritas-amazon-inline-score--loading {
+        opacity: 0.65;
+        font-weight: 700;
+      }
+      .veritas-amazon-inline-score--high {
+        border-color: rgba(21, 128, 61, 0.45);
+        background: #dcfce7;
+        color: #14532d;
+      }
+      .veritas-amazon-inline-score--mid {
+        border-color: rgba(161, 98, 7, 0.45);
+        background: #fef9c3;
+        color: #713f12;
+      }
+      .veritas-amazon-inline-score--low {
+        border-color: rgba(185, 28, 28, 0.45);
+        background: #fee2e2;
+        color: #7f1d1d;
+      }
+      .veritas-amazon-inline-score--err {
+        border-color: rgba(185, 28, 28, 0.5);
+        background: #fff1f2;
+        color: #9f1239;
       }
 
       /* Account authenticity pill (Instagram, X, LinkedIn, Reddit, …) */
@@ -1215,6 +1368,299 @@
     if (isX) scanXAccountBadges();
     if (isLinkedIn) scanLinkedInAccountBadges();
     if (isReddit) scanRedditAccountBadges();
+  }
+
+  function scrapeAmazonReviewTexts() {
+    const seen = new Set();
+    const out = [];
+    const blocks = document.querySelectorAll(
+      '[data-hook="review"], [id^="customer_review"], [id^="customerReviews"] [data-hook="review"]'
+    );
+    blocks.forEach((block) => {
+      const body =
+        block.querySelector('[data-hook="review-body"]') ||
+        block.querySelector(".review-text-content") ||
+        block.querySelector(".review-text");
+      const t = (body?.innerText || "").replace(/\s+/g, " ").trim();
+      if (t.length < 18) return;
+      const key = t.slice(0, 160);
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(t.slice(0, 6000));
+    });
+    if (out.length < 3) {
+      document.querySelectorAll('[data-hook="review-body"]').forEach((body) => {
+        const t = (body.innerText || "").replace(/\s+/g, " ").trim();
+        if (t.length < 18) return;
+        const key = t.slice(0, 160);
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push(t.slice(0, 6000));
+      });
+    }
+    return out.slice(0, 50);
+  }
+
+  async function analyzeAmazonReviewsTrustClient(reviewsText) {
+    const bg = await sendMessageToExtension({
+      type: "VERITAS_AMAZON_REVIEW_TRUST",
+      reviewsText,
+    });
+    if (bg && bg.ok === true && bg.data) return bg.data;
+    if (bg && bg.ok === false) {
+      throw new Error(formatExtensionMessagingError(bg?.error || "Review analysis failed"));
+    }
+    const resp = await fetch(`${API_BASE}/amazon-review-trust`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reviewsText }),
+    });
+    if (!resp.ok) throw new Error(`Review trust failed: ${resp.status}`);
+    return resp.json();
+  }
+
+  function renderAmazonTrustPanel(panel, data) {
+    const ts = clamp(Math.round(Number(data.trustScore)), 0, 100);
+    const verdict = escapeHtml(String(data.verdict || "Mixed Signals"));
+    const summary = escapeHtml(String(data.summary || ""));
+    const issues = Array.isArray(data.issues) ? data.issues : [];
+    const issuesLis = issues
+      .slice(0, 14)
+      .map((i) => `<li>${escapeHtml(String(i))}</li>`)
+      .join("");
+    panel.innerHTML = `
+      <div class="veritas-amazon-result">
+        <div class="veritas-amazon-row">
+          <span class="veritas-amazon-score">${ts}</span>
+          <span class="veritas-amazon-verdict">${verdict}</span>
+        </div>
+        <p class="veritas-amazon-summary">${summary}</p>
+        <ul class="veritas-amazon-issues">${issuesLis || "<li>None listed</li>"}</ul>
+      </div>`;
+  }
+
+  function initAmazonReviewTrustDock() {
+    injectStyleOnce();
+    if (!isAmazonProductReviewsPage()) return;
+    if (document.getElementById("veritas-amazon-root")) return;
+
+    const root = document.createElement("div");
+    root.id = "veritas-amazon-root";
+    root.className = "veritas-amazon-dock";
+
+    const inner = document.createElement("div");
+    inner.className = "veritas-amazon-dock-inner";
+
+    const title = document.createElement("div");
+    title.className = "veritas-amazon-dock-title";
+    title.textContent = "Veritas · Amazon reviews";
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "veritas-amazon-dock-btn";
+    btn.textContent = "Score review trust";
+
+    const panel = document.createElement("div");
+    panel.className = "veritas-amazon-dock-panel";
+    panel.style.display = "none";
+
+    btn.addEventListener("click", async () => {
+      panel.style.display = "block";
+      panel.innerHTML = '<div class="veritas-amazon-loading">Reading reviews…</div>';
+      btn.disabled = true;
+      try {
+        const snippets = scrapeAmazonReviewTexts();
+        if (snippets.length < 1) {
+          panel.innerHTML =
+            '<div class="veritas-amazon-err">No review text found. Scroll to load reviews, then try again.</div>';
+          return;
+        }
+        const reviewsText = snippets.map((t, i) => `--- Review ${i + 1} ---\n${t}`).join("\n\n");
+        if (reviewsText.length < 40) {
+          panel.innerHTML =
+            '<div class="veritas-amazon-err">Not enough review text. Scroll to load more reviews.</div>';
+          return;
+        }
+        const data = await analyzeAmazonReviewsTrustClient(reviewsText);
+        renderAmazonTrustPanel(panel, data);
+      } catch (e) {
+        panel.innerHTML = `<div class="veritas-amazon-err">${escapeHtml(String(e?.message || e))}</div>`;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    inner.appendChild(title);
+    inner.appendChild(btn);
+    inner.appendChild(panel);
+    root.appendChild(inner);
+    document.body.appendChild(root);
+  }
+
+  let amazonInlineTimer = null;
+  let amazonInlineRunning = false;
+
+  function inlineAmazonCredClass(score) {
+    const s = clamp(Math.round(Number(score)), 0, 100);
+    if (s >= 70) return "veritas-amazon-inline-score--high";
+    if (s >= 45) return "veritas-amazon-inline-score--mid";
+    return "veritas-amazon-inline-score--low";
+  }
+
+  function collectAmazonReviewBlockRoots() {
+    const set = new Set();
+    document.querySelectorAll('[data-hook="review"]').forEach((n) => set.add(n));
+    return Array.from(set);
+  }
+
+  function getAmazonReviewBodyForBlock(block) {
+    const body =
+      block.querySelector('[data-hook="review-body"]') ||
+      block.querySelector(".review-text-content") ||
+      block.querySelector(".review-text");
+    return (body?.innerText || "").replace(/\s+/g, " ").trim();
+  }
+
+  function findAmazonAuthorNameElement(block) {
+    return (
+      block.querySelector("span.a-profile-name") ||
+      block.querySelector(".a-profile-content .a-profile-name") ||
+      block.querySelector(".a-profile-name") ||
+      block.querySelector('[data-hook="review-author"] a') ||
+      block.querySelector(".a-profile-display-name a") ||
+      block.querySelector(".a-profile-display-name")
+    );
+  }
+
+  function getAmazonAuthorLabel(block) {
+    const el = findAmazonAuthorNameElement(block);
+    return (el?.textContent || "").replace(/\s+/g, " ").trim().slice(0, 200) || "Reviewer";
+  }
+
+  async function analyzeAmazonInlineScoresClient(reviews) {
+    const bg = await sendMessageToExtension({
+      type: "VERITAS_AMAZON_INLINE_SCORES",
+      reviews,
+    });
+    if (bg && bg.ok === true && bg.data) return bg.data;
+    if (bg && bg.ok === false) {
+      throw new Error(formatExtensionMessagingError(bg?.error || "Inline scores failed"));
+    }
+    const resp = await fetch(`${API_BASE}/amazon-review-scores`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reviews }),
+    });
+    if (!resp.ok) throw new Error(`Inline scores failed: ${resp.status}`);
+    return resp.json();
+  }
+
+  function scheduleAmazonInlineScores() {
+    window.clearTimeout(amazonInlineTimer);
+    amazonInlineTimer = window.setTimeout(() => {
+      runAmazonInlineCredibilityScores().catch(() => {});
+    }, 1100);
+  }
+
+  async function runAmazonInlineCredibilityScores() {
+    if (!isAmazonProductReviewsPage() || amazonInlineRunning) return;
+
+    const roots = collectAmazonReviewBlockRoots();
+    const pending = [];
+
+    for (const block of roots) {
+      if (block.querySelector("[data-veritas-inline-badge]")) continue;
+      const text = getAmazonReviewBodyForBlock(block);
+      if (text.length < 12) continue;
+      const nameEl = findAmazonAuthorNameElement(block);
+      if (!nameEl) continue;
+
+      amazonReviewUid += 1;
+      const id = `vz_${amazonReviewUid}_${Date.now().toString(36)}`;
+      block.dataset.veritasRid = id;
+
+      const badge = document.createElement("span");
+      badge.setAttribute("data-veritas-inline-badge", "1");
+      badge.className = "veritas-amazon-inline-score veritas-amazon-inline-score--loading";
+      badge.textContent = "…";
+      badge.title = "Veritas: scoring this review…";
+      nameEl.insertAdjacentElement("afterend", badge);
+
+      pending.push({
+        id,
+        author: getAmazonAuthorLabel(block),
+        text: text.slice(0, 7800),
+        badgeEl: badge,
+      });
+    }
+
+    if (pending.length === 0) return;
+
+    amazonInlineRunning = true;
+    const MAX = 24;
+    try {
+      for (let i = 0; i < pending.length; i += MAX) {
+        const chunk = pending.slice(i, i + MAX);
+        const payload = chunk.map(({ id, author, text }) => ({ id, author, text }));
+        const data = await analyzeAmazonInlineScoresClient(payload);
+        const scores = Array.isArray(data.scores) ? data.scores : [];
+        const map = new Map(scores.map((s) => [String(s.id), s.credibilityScore]));
+
+        for (const row of chunk) {
+          const sc = map.get(row.id);
+          const badge = row.badgeEl;
+          if (!badge?.isConnected) continue;
+          if (sc === undefined) {
+            badge.textContent = "?";
+            badge.classList.remove("veritas-amazon-inline-score--loading");
+            badge.classList.add("veritas-amazon-inline-score--mid");
+            badge.title = "Veritas: could not map score for this review";
+            continue;
+          }
+          const v = clamp(Math.round(Number(sc)), 0, 100);
+          badge.textContent = String(v);
+          badge.classList.remove("veritas-amazon-inline-score--loading");
+          badge.classList.add(inlineAmazonCredClass(v));
+          badge.title = `Veritas: estimated credibility of this review — ${v}/100 (informational only)`;
+        }
+      }
+    } catch (e) {
+      pending.forEach(({ badgeEl }) => {
+        if (badgeEl?.isConnected && badgeEl.classList.contains("veritas-amazon-inline-score--loading")) {
+          badgeEl.textContent = "!";
+          badgeEl.classList.remove("veritas-amazon-inline-score--loading");
+          badgeEl.classList.add("veritas-amazon-inline-score--err");
+          badgeEl.title = String(e?.message || e);
+        }
+      });
+    } finally {
+      amazonInlineRunning = false;
+    }
+  }
+
+  /** Amazon shopping only: SPA navigation does not reload this script — poll + observe. */
+  if (isAmazonRetailHost()) {
+    if (window.self !== window.top) {
+      return;
+    }
+    const runAmazonDock = () => {
+      if (!isAmazonProductReviewsPage()) {
+        const r = document.getElementById("veritas-amazon-root");
+        if (r) r.remove();
+        return;
+      }
+      if (!document.getElementById("veritas-amazon-root")) initAmazonReviewTrustDock();
+      scheduleAmazonInlineScores();
+    };
+    runAmazonDock();
+    window.setInterval(runAmazonDock, 1600);
+    window.addEventListener("popstate", runAmazonDock);
+    const amazonObs = new MutationObserver(() => {
+      window.clearTimeout(amazonObs._t);
+      amazonObs._t = window.setTimeout(runAmazonDock, 650);
+    });
+    amazonObs.observe(document.documentElement, { childList: true, subtree: true });
+    return;
   }
 
   if (isInstagram) {

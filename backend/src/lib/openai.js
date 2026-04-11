@@ -220,4 +220,192 @@ async function checkAiVision({ apiKey, model, imageBase64 }) {
   }
 }
 
-module.exports = { analyzeText, checkAiVision };
+function mockAmazonReviewsTrust(previewLen) {
+  const n = Math.max(1, Number(previewLen) || 1);
+  const trustScore = 38 + (n % 52);
+  const verdict = trustScore >= 70 ? "Highly Trustworthy" : trustScore >= 45 ? "Mixed Signals" : "Suspicious";
+  return {
+    trustScore,
+    verdict,
+    summary:
+      "No API key: mock response. Set OPENAI_API_KEY in backend/.env for real review-trust analysis. Payload length was used only to vary the demo score.",
+    issues: ["OPENAI_API_KEY not configured (mock mode)"],
+  };
+}
+
+async function openAiAmazonReviewsTrust({ apiKey, model, reviewsText }) {
+  const instructions = [
+    "You are an advanced AI system trained to detect fake, manipulated, or low-quality reviews.",
+    "",
+    "Analyze the following Amazon product reviews.",
+    "",
+    "Your task:",
+    "1. Detect signs of fake or manipulated reviews",
+    "2. Identify patterns like:",
+    "   - Repetitive wording",
+    "   - Overly generic praise",
+    "   - Lack of specific product details",
+    "   - Suspiciously extreme sentiment",
+    "   - Review similarity across multiple entries",
+    "3. Evaluate overall trustworthiness",
+    "",
+    "Return STRICT JSON:",
+    "",
+    "{",
+    '  "trustScore": number (0-100),',
+    '  "verdict": "Highly Trustworthy" | "Mixed Signals" | "Suspicious",',
+    '  "summary": "2-3 line explanation",',
+    '  "issues": ["issue1", "issue2"]',
+    "}",
+    "",
+    "Reviews:",
+    reviewsText,
+  ].join("\n");
+
+  const resp = await axios.post(
+    "https://api.openai.com/v1/chat/completions",
+    {
+      model,
+      messages: [
+        { role: "system", content: "Return strict JSON only. No markdown fences." },
+        { role: "user", content: instructions },
+      ],
+      temperature: 0.25,
+      max_tokens: 900,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      timeout: 60000,
+    }
+  );
+
+  const content = resp.data?.choices?.[0]?.message?.content ?? "";
+  const firstBrace = content.indexOf("{");
+  const lastBrace = content.lastIndexOf("}");
+  if (firstBrace === -1 || lastBrace === -1) {
+    throw new Error("OpenAI returned non-JSON content");
+  }
+  return JSON.parse(content.slice(firstBrace, lastBrace + 1));
+}
+
+function normalizeAmazonVerdict(v) {
+  const s = String(v || "").trim();
+  if (s === "Highly Trustworthy") return "Highly Trustworthy";
+  if (s === "Mixed Signals") return "Mixed Signals";
+  if (s === "Suspicious") return "Suspicious";
+  const t = s.toLowerCase();
+  if (t.includes("highly") && t.includes("trust")) return "Highly Trustworthy";
+  if (t.includes("mixed")) return "Mixed Signals";
+  if (t.includes("suspicious")) return "Suspicious";
+  return "Mixed Signals";
+}
+
+async function analyzeAmazonReviewsTrust({ apiKey, model, reviewsText }) {
+  const preview = String(reviewsText || "").length;
+  if (!apiKey) return mockAmazonReviewsTrust(preview);
+  try {
+    const res = await openAiAmazonReviewsTrust({ apiKey, model, reviewsText });
+    let trustScore = Math.round(Number(res.trustScore));
+    if (!Number.isFinite(trustScore)) trustScore = 50;
+    trustScore = Math.max(0, Math.min(100, trustScore));
+    const verdict = normalizeAmazonVerdict(res.verdict);
+    const summary = String(res.summary || "").trim() || "No summary provided.";
+    const issues = Array.isArray(res.issues) ? res.issues.map((x) => String(x)) : [];
+    return { trustScore, verdict, summary, issues };
+  } catch {
+    return mockAmazonReviewsTrust(preview);
+  }
+}
+
+function mockAmazonInlineScores(items) {
+  return {
+    scores: items.map((it, i) => {
+      const n = String(it.text || "").length + String(it.id || "").length + i;
+      const credibilityScore = 32 + (n % 56);
+      return { id: String(it.id), credibilityScore };
+    }),
+  };
+}
+
+async function openAiAmazonReviewInlineScores({ apiKey, model, items }) {
+  const blocks = items.map((it) => {
+    const author = String(it.author || "Unknown").slice(0, 160);
+    const body = String(it.text || "").slice(0, 6500);
+    return `ID: ${it.id}\nAuthor: ${author}\nReview:\n${body}`;
+  });
+
+  const user = [
+    "You assess individual Amazon product reviews (one score per review).",
+    "For each review, estimate how credible the REVIEW TEXT appears: specificity, balanced tone, detail about the product, vs generic hype, manipulation cues, or empty praise.",
+    "",
+    "Return STRICT JSON with this shape only:",
+    '{ "scores": [ { "id": string, "credibilityScore": number } ] }',
+    "credibilityScore is an integer 0-100 (higher = more credible as a review). Include every ID exactly once.",
+    "",
+    "---",
+    "",
+    blocks.join("\n\n---\n\n"),
+  ].join("\n");
+
+  const resp = await axios.post(
+    "https://api.openai.com/v1/chat/completions",
+    {
+      model,
+      messages: [
+        { role: "system", content: "Return strict JSON only. No markdown." },
+        { role: "user", content: user },
+      ],
+      temperature: 0.2,
+      max_tokens: 2500,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      timeout: 90000,
+    }
+  );
+
+  const content = resp.data?.choices?.[0]?.message?.content ?? "";
+  const firstBrace = content.indexOf("{");
+  const lastBrace = content.lastIndexOf("}");
+  if (firstBrace === -1 || lastBrace === -1) {
+    throw new Error("OpenAI returned non-JSON content");
+  }
+  return JSON.parse(content.slice(firstBrace, lastBrace + 1));
+}
+
+async function scoreAmazonReviewsIndividually({ apiKey, model, items }) {
+  if (!items || items.length === 0) return { scores: [] };
+  if (!apiKey) return mockAmazonInlineScores(items);
+  try {
+    const res = await openAiAmazonReviewInlineScores({ apiKey, model, items });
+    const raw = Array.isArray(res.scores) ? res.scores : [];
+    const byId = new Map();
+    for (const row of raw) {
+      const id = String(row.id || "");
+      let s = Math.round(Number(row.credibilityScore));
+      if (!Number.isFinite(s)) s = 50;
+      s = Math.max(0, Math.min(100, s));
+      if (id) byId.set(id, s);
+    }
+    const scores = items.map((it) => ({
+      id: String(it.id),
+      credibilityScore: byId.has(String(it.id)) ? byId.get(String(it.id)) : 45,
+    }));
+    return { scores };
+  } catch {
+    return mockAmazonInlineScores(items);
+  }
+}
+
+module.exports = {
+  analyzeText,
+  checkAiVision,
+  analyzeAmazonReviewsTrust,
+  scoreAmazonReviewsIndividually,
+};

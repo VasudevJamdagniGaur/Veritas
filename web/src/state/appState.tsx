@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { api, type User } from "../lib/api";
-import { loadFaceImageUrl } from "../lib/profileImageFirestore";
+import { getLocalFaceCapture, removeLocalFaceCapture, setLocalFaceCapture } from "../lib/localFaceCapture";
 import { stripFaceCaptureDataUrl } from "../lib/userFields";
 
 type AppState = {
@@ -23,51 +23,44 @@ function parseStoredUser(raw: string): User | null {
   }
 }
 
+function mergeLocalFaceCapture(u: User | null): User | null {
+  if (!u?._id) return u;
+  const local = getLocalFaceCapture(u._id);
+  return local ? { ...u, faceCaptureDataUrl: local } : u;
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return null;
-    return parseStoredUser(raw);
+    return mergeLocalFaceCapture(parseStoredUser(raw));
   });
 
   useEffect(() => {
     if (user) {
       const slim = stripFaceCaptureDataUrl(user);
       localStorage.setItem(LS_KEY, JSON.stringify(slim));
+      if (user.faceCaptureDataUrl) {
+        setLocalFaceCapture(user._id, user.faceCaptureDataUrl);
+      }
     } else {
       localStorage.removeItem(LS_KEY);
     }
   }, [user]);
 
-  /** Load Firestore-backed profile image URL when session user id is known. */
-  useEffect(() => {
-    if (!user?._id) return;
-    let cancelled = false;
-    loadFaceImageUrl(user._id)
-      .then((url) => {
-        if (cancelled || !url) return;
-        setUser((prev) => {
-          if (!prev) return prev;
-          if (prev.faceImageUrl === url) return prev;
-          return { ...stripFaceCaptureDataUrl(prev), faceImageUrl: url };
-        });
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [user?._id]);
-
   const refreshUser = async () => {
     if (!user?._id) return;
     const resp = await api.get<{ user: User }>(`/user/${user._id}`);
+    const localFace = getLocalFaceCapture(user._id);
     let next = stripFaceCaptureDataUrl(resp.data.user);
-    const firestoreUrl = await loadFaceImageUrl(user._id).catch(() => null);
-    if (firestoreUrl) next = { ...next, faceImageUrl: firestoreUrl };
+    if (localFace) next = { ...next, faceCaptureDataUrl: localFace };
     setUser(next);
   };
 
-  const logout = () => setUser(null);
+  const logout = () => {
+    if (user?._id) removeLocalFaceCapture(user._id);
+    setUser(null);
+  };
 
   const value = useMemo(() => ({ user, setUser, refreshUser, logout }), [user]);
 

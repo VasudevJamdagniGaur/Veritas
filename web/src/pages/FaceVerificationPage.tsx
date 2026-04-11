@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type User } from "../lib/api";
-import { saveFaceCaptureToFirebase } from "../lib/profileImageFirestore";
+import { setLocalFaceCapture } from "../lib/localFaceCapture";
 import { stripFaceCaptureDataUrl } from "../lib/userFields";
 import { useApp } from "../state/appState";
 import { Button, Card, Shell } from "../components/Ui";
@@ -134,34 +134,24 @@ export default function FaceVerificationPage() {
         userId: u._id,
         captureDataUrl,
       });
-      let merged = stripFaceCaptureDataUrl(resp.data.user);
+      let merged: User = stripFaceCaptureDataUrl(resp.data.user);
       if (captureDataUrl) {
-        try {
-          const faceImageUrl = await saveFaceCaptureToFirebase(u._id, captureDataUrl);
-          merged = { ...merged, faceImageUrl };
-        } catch (firebaseErr) {
-          // eslint-disable-next-line no-console
-          console.warn("Firebase profile image upload failed", firebaseErr);
-        }
+        setLocalFaceCapture(u._id, captureDataUrl);
+        merged = { ...merged, faceCaptureDataUrl: captureDataUrl };
       }
       setUser(merged);
       nav("/link-social");
     } catch (e: any) {
       // If backend is temporarily unavailable, keep the demo flow unblocked.
       setVerifyErr(e?.response?.data?.error || e?.message || "Verification failed (backend not ready).");
-      let merged = stripFaceCaptureDataUrl({
+      let merged: User = stripFaceCaptureDataUrl({
         ...u,
         isHumanVerified: true,
         trustScore: Math.min(100, (u.trustScore ?? 50) + 15),
       });
       if (captureDataUrl) {
-        try {
-          const faceImageUrl = await saveFaceCaptureToFirebase(u._id, captureDataUrl);
-          merged = { ...merged, faceImageUrl };
-        } catch (firebaseErr) {
-          // eslint-disable-next-line no-console
-          console.warn("Firebase profile image upload failed", firebaseErr);
-        }
+        setLocalFaceCapture(u._id, captureDataUrl);
+        merged = { ...merged, faceCaptureDataUrl: captureDataUrl };
       }
       setUser(merged);
       nav("/link-social");
@@ -173,8 +163,7 @@ export default function FaceVerificationPage() {
   return (
     <Shell>
       <div className="mb-6">
-        <div className="text-sm text-gray-400">Step 2</div>
-        <h1 className="mt-1 text-3xl font-semibold text-white">Face Verification</h1>
+        <h1 className="text-3xl font-semibold text-white">Face Verification</h1>
         <p className="mt-2 max-w-2xl text-sm text-gray-300">
           Proof-of-human: we capture a webcam frame and mark your account verified (no heavy ML).
         </p>

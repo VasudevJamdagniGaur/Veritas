@@ -56,9 +56,9 @@ export type User = {
   isHumanVerified: boolean;
   socialHandle?: string;
   socialUrl?: string;
-  /** Data URL from API (not persisted in localStorage; prefer faceImageUrl) */
+  /** JPEG data URL kept in browser local storage for avatar preview (not sent to cloud by default) */
   faceCaptureDataUrl?: string;
-  /** Firebase Storage download URL stored in Firestore (`veritas_profiles`) */
+  /** Optional remote image URL if provided by API */
   faceImageUrl?: string;
   linkedinUrl?: string;
   redditUsername?: string;

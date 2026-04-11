@@ -8,6 +8,8 @@
   const IG_TAG = "data-veritas-ig-badge";
   const SOCIAL_TAG = "data-veritas-account-badge";
 
+  let reelVideoIdSeq = 0;
+
   const host =
     typeof location !== "undefined" ? location.hostname.replace(/^www\./, "") : "";
 
@@ -246,6 +248,28 @@
         margin: 0;
         color: #d1d5db;
         font-size: 12px;
+      }
+
+      /* Instagram full-screen Reel: pin Check AI to top-right of the video frame */
+      .veritas-ig-reel-overlay {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 2147483645;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 8px;
+        max-width: min(340px, calc(100% - 20px));
+        pointer-events: auto;
+      }
+      .veritas-ig-reel-overlay .veritas-check-ai-panel {
+        margin-top: 0;
+        width: 100%;
+      }
+      .veritas-ig-reel-overlay .veritas-check-ai-btn {
+        box-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(6px);
       }
 
       /* Account authenticity pill (Instagram, X, LinkedIn, Reddit, …) */
@@ -801,7 +825,10 @@
   }
 
   function pickLargestVisibleImage(root) {
-    const imgs = Array.from(root.querySelectorAll("img"));
+    const imgs =
+      root instanceof HTMLImageElement
+        ? [root]
+        : Array.from(root.querySelectorAll("img"));
     let best = null;
     let bestArea = 0;
     for (const img of imgs) {
@@ -818,7 +845,10 @@
   }
 
   function tryCaptureVideoFrame(root) {
-    const videos = Array.from(root.querySelectorAll("video"));
+    const videos =
+      root instanceof HTMLVideoElement
+        ? [root]
+        : Array.from(root.querySelectorAll("video"));
     for (const v of videos) {
       const r = v.getBoundingClientRect();
       if (r.width * r.height < 64 * 64) continue;
@@ -949,6 +979,110 @@
     throw new Error("Could not load image (extension background unreachable). Refresh the page and try again.");
   }
 
+  function attachCheckAiToHost(host, captureRoot) {
+    if (host.querySelector(".veritas-check-ai-btn")) return;
+
+    const row = document.createElement("div");
+    row.className = "veritas-check-ai-row";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "veritas-check-ai-btn";
+    btn.textContent = "Check AI";
+    btn.addEventListener("click", async () => {
+      const panel = mountCheckAiPanel(host);
+      panel.innerHTML =
+        '<div class="veritas-check-ai-card veritas-check-ai-card--loading">Analyzing image…</div>';
+      btn.disabled = true;
+      try {
+        const payload = captureMediaForCheckAi(captureRoot);
+        const result = await checkAiAnalyze(payload);
+        renderCheckAiResult(panel, result);
+      } catch (e) {
+        const msg = escapeHtml(String(e?.message || e));
+        panel.innerHTML = `<div class="veritas-check-ai-card veritas-check-ai-card--err">${msg}</div>`;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    row.appendChild(btn);
+    host.appendChild(row);
+  }
+
+  function findPrimaryInstagramReelVideo() {
+    const videos = Array.from(document.querySelectorAll("video"));
+    let best = null;
+    let bestArea = 0;
+    for (const v of videos) {
+      const r = v.getBoundingClientRect();
+      const area = r.width * r.height;
+      if (area < 120 * 160) continue;
+      if (r.bottom < -40 || r.top > window.innerHeight + 40) continue;
+      if (area > bestArea) {
+        bestArea = area;
+        best = v;
+      }
+    }
+    return best;
+  }
+
+  function ensureReelVideoToken(video) {
+    let t = video.getAttribute("data-veritas-reel-id");
+    if (!t) {
+      reelVideoIdSeq += 1;
+      t = `vr_${reelVideoIdSeq}_${Date.now().toString(36)}`;
+      video.setAttribute("data-veritas-reel-id", t);
+    }
+    return t;
+  }
+
+  /**
+   * Instagram Reels full-screen player usually has no <article>, so feed scanning never runs.
+   * Mount a top-right overlay on the main reel video's parent.
+   */
+  function scanInstagramReelCheckAi() {
+    if (!isInstagram) return;
+    injectStyleOnce();
+
+    if (!isInstagramReelSurface()) {
+      document.querySelectorAll("[data-veritas-reel-checkai-host]").forEach((n) => n.remove());
+      return;
+    }
+
+    document.querySelectorAll("[data-veritas-reel-checkai-host]").forEach((host) => {
+      const token = host.getAttribute("data-veritas-for-video");
+      const still = token && document.querySelector(`video[data-veritas-reel-id="${token}"]`);
+      if (!still) host.remove();
+    });
+
+    const video = findPrimaryInstagramReelVideo();
+    if (!video) return;
+
+    const token = ensureReelVideoToken(video);
+    const existing = document.querySelector(
+      `[data-veritas-reel-checkai-host][data-veritas-for-video="${token}"]`
+    );
+    if (existing && existing.isConnected) return;
+
+    document.querySelectorAll(`[data-veritas-reel-checkai-host][data-veritas-for-video="${token}"]`).forEach((n) => {
+      if (n !== existing) n.remove();
+    });
+
+    const parent = video.parentElement;
+    if (!parent) return;
+
+    const cs = getComputedStyle(parent);
+    if (cs.position === "static") parent.style.position = "relative";
+
+    const host = document.createElement("div");
+    host.setAttribute("data-veritas-reel-checkai-host", "1");
+    host.setAttribute("data-veritas-for-video", token);
+    host.className = "veritas-ig-reel-overlay";
+
+    const captureRoot = parent;
+    parent.appendChild(host);
+    attachCheckAiToHost(host, captureRoot);
+  }
+
   function findCandidatePosts() {
     const set = new Set();
     for (const sel of ["article", '[role="article"]']) {
@@ -1057,31 +1191,7 @@
     el.setAttribute(TAG_ATTR, "1");
 
     const host = ensurePostToolbarHost(el);
-
-    const row = document.createElement("div");
-    row.className = "veritas-check-ai-row";
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "veritas-check-ai-btn";
-    btn.textContent = "Check AI";
-    btn.addEventListener("click", async () => {
-      const panel = mountCheckAiPanel(host);
-      panel.innerHTML =
-        '<div class="veritas-check-ai-card veritas-check-ai-card--loading">Analyzing image…</div>';
-      btn.disabled = true;
-      try {
-        const payload = captureMediaForCheckAi(el);
-        const result = await checkAiAnalyze(payload);
-        renderCheckAiResult(panel, result);
-      } catch (e) {
-        const msg = escapeHtml(String(e?.message || e));
-        panel.innerHTML = `<div class="veritas-check-ai-card veritas-check-ai-card--err">${msg}</div>`;
-      } finally {
-        btn.disabled = false;
-      }
-    });
-    row.appendChild(btn);
-    host.appendChild(row);
+    attachCheckAiToHost(host, el);
 
     const text = postTextFromElement(el);
     if (!text || text.length < 10) return;
@@ -1111,6 +1221,7 @@
     const runIg = () => {
       scanInstagram();
       scanFeed();
+      scanInstagramReelCheckAi();
     };
     runIg();
     const obs = new MutationObserver(() => {

@@ -744,48 +744,27 @@
         color: #7f1d1d !important;
       }
 
-      /* X / Twitter: compact + solid contrast (translucent defaults are invisible on dark UI). */
+      /* X / Twitter: same authenticity pill system as Instagram (tier colors from .veritas-ig-realness--*). */
       .veritas-account-badge--x.veritas-ig-realness {
-        box-sizing: border-box !important;
-        position: relative !important;
-        z-index: 2147483646 !important;
-        display: inline-flex !important;
-        flex-shrink: 0 !important;
-        min-width: 1.35rem !important;
-        max-width: none !important;
-        min-height: 16px !important;
-        padding: 1px 6px !important;
-        margin-left: 4px !important;
-        margin-right: 2px !important;
-        font-size: 11px !important;
-        line-height: 1.25 !important;
-        font-weight: 700 !important;
-        border-radius: 999px !important;
-        opacity: 1 !important;
-        visibility: visible !important;
-        pointer-events: auto !important;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45) !important;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 2147483646;
+        display: inline-flex;
+        flex-shrink: 0;
+        min-width: 2rem;
+        padding: 2px 8px;
+        margin-left: 0;
+        margin-right: 6px;
+        font-size: 12px;
+        line-height: 1.25;
+        font-weight: 700;
+        border-radius: 999px;
+        vertical-align: middle;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
       }
       .veritas-account-badge--x.veritas-ig-realness--loading {
-        background: #52525b !important;
-        border: 1px solid #d4d4d8 !important;
-        color: #fafafa !important;
-        opacity: 1 !important;
-      }
-      .veritas-account-badge--x.veritas-ig-realness--high {
-        background: #15803d !important;
-        border: 1px solid #4ade80 !important;
-        color: #ffffff !important;
-      }
-      .veritas-account-badge--x.veritas-ig-realness--mid {
-        background: #a16207 !important;
-        border: 1px solid #facc15 !important;
-        color: #fefce8 !important;
-      }
-      .veritas-account-badge--x.veritas-ig-realness--low {
-        background: #b91c1c !important;
-        border: 1px solid #fca5a5 !important;
-        color: #ffffff !important;
+        opacity: 0.75;
+        font-weight: 600;
       }
     `;
     document.documentElement.appendChild(style);
@@ -894,26 +873,85 @@
     }
   }
 
-  /** X renders ⋮ menus in #layers / role=menu — those <a> are not the tweet header; skip or badge lands inside the dropdown. */
+  /** /handle/followers, /handle/following, etc. — same handle as profile; badge looked wrong under follower counts. */
+  function isXProfileFollowersOrFollowingHref(href) {
+    if (!href || href === "#" || href.startsWith("javascript:")) return false;
+    try {
+      const u = href.startsWith("http") ? new URL(href) : new URL(href, "https://x.com");
+      const h = u.hostname.replace(/^www\./, "");
+      if (h !== "x.com" && h !== "twitter.com") return false;
+      const parts = u.pathname.split("/").filter(Boolean);
+      if (parts.length < 2) return false;
+      const seg = parts[1].toLowerCase();
+      return (
+        seg === "followers" ||
+        seg === "following" ||
+        seg === "verified_followers" ||
+        seg === "verified_followings" ||
+        seg === "followers_you_know"
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  /** Skip ⋮ / dropdown <a> (often portaled to #layers, outside #react-root). Do not treat all of #layers as overlay. */
   function isXEphemeralOverlayUI(a) {
-    const layers = document.getElementById("layers");
-    if (layers && layers.contains(a)) return true;
     if (a.closest('[role="menu"]')) return true;
     if (a.closest('[role="listbox"]')) return true;
+    const layers = document.getElementById("layers");
+    const root = document.getElementById("react-root");
+    if (layers && layers.contains(a) && root && !root.contains(a)) return true;
     return false;
   }
 
   /**
-   * Tweet row: only badge links under [data-testid="User-Name"] (next to @handle).
-   * Elsewhere in the tweet (body, cards, ⋮ menu portal): no badge. Nav/sidebar: allow.
+   * Tweet: prefer links inside User-Name / UserName. If X changes test ids, accept profile links
+   * in the header band above tweet text / cards (same row as display name @handle).
+   * Elsewhere (nav, profile chrome, who-to-follow): allow.
    */
   function shouldAttachXAccountBadge(a) {
     if (isXEphemeralOverlayUI(a)) return false;
     const tweet = a.closest('[data-testid="tweet"]');
-    if (tweet) {
-      return !!(a.closest('[data-testid="User-Name"]') || a.closest('[data-testid="UserName"]'));
+    if (!tweet) return true;
+
+    if (
+      a.closest('[data-testid="User-Name"]') ||
+      a.closest('[data-testid="UserName"]') ||
+      a.closest('[data-testid="User-Names"]')
+    ) {
+      return true;
     }
+
+    if (!xHandleFromHref(a.getAttribute("href") || "")) return false;
+
+    const rb = a.getBoundingClientRect();
+    if (rb.width < 2 || rb.height < 2) return false;
+
+    const scope = a.closest('[data-testid="QuoteTweet"]') || tweet;
+    const textBlock = scope.querySelector('[data-testid="tweetText"]');
+    if (textBlock) {
+      const tr = textBlock.getBoundingClientRect();
+      if (rb.top > tr.top - 2) return false;
+    }
+    const card = scope.querySelector('[data-testid="card.wrapper"]');
+    if (card) {
+      const cr = card.getBoundingClientRect();
+      if (rb.top > cr.top - 6) return false;
+    }
+
     return true;
+  }
+
+  function xTweetAlreadyBadgedForUser(tweet, scoreKey) {
+    const raw = tweet.getAttribute("data-veritas-x-badged-users") || "";
+    return raw.split(",").filter(Boolean).includes(scoreKey);
+  }
+
+  function xTweetMarkBadgedForUser(tweet, scoreKey) {
+    const parts = (tweet.getAttribute("data-veritas-x-badged-users") || "").split(",").filter(Boolean);
+    if (!parts.includes(scoreKey)) parts.push(scoreKey);
+    tweet.setAttribute("data-veritas-x-badged-users", parts.join(","));
   }
 
   /** X sometimes nests links inside open shadow roots — normal querySelector misses them. */
@@ -1056,7 +1094,7 @@
     }
   }
 
-  function attachAccountScoreBadge(anchor, scoreKey, useReelWrap, extraBadgeClass) {
+  function attachAccountScoreBadge(anchor, scoreKey, useReelWrap, extraBadgeClass, insertBadgeBeforeAnchor) {
     const badge = document.createElement("span");
     badge.className = "veritas-ig-realness veritas-ig-realness--loading";
     if (extraBadgeClass) badge.classList.add(extraBadgeClass);
@@ -1072,6 +1110,8 @@
       wrap.appendChild(anchor);
       wrap.appendChild(badge);
       badge.classList.add("veritas-ig-realness--next-to-handle");
+    } else if (insertBadgeBeforeAnchor) {
+      anchor.insertAdjacentElement("beforebegin", badge);
     } else {
       anchor.insertAdjacentElement("afterend", badge);
     }
@@ -1144,15 +1184,19 @@
     const slotSeen = new Set();
     for (const a of anchors) {
       if (a.getAttribute(SOCIAL_TAG) === "1") continue;
-      const scoreKey = xHandleFromHref(a.getAttribute("href") || "");
+      const href = a.getAttribute("href") || "";
+      if (isXProfileFollowersOrFollowingHref(href)) continue;
+      const scoreKey = xHandleFromHref(href);
       if (!scoreKey) continue;
       if (isLikelyGenericAvatarLink(a)) continue;
       if (!shouldAttachXAccountBadge(a)) continue;
-      const userNameRow = a.closest('[data-testid="User-Name"]') || a.closest('[data-testid="UserName"]');
-      if (userNameRow && userNameRow.getAttribute("data-veritas-x-userline") === "1") {
+
+      const tweet = a.closest('[data-testid="tweet"]');
+      if (tweet && xTweetAlreadyBadgedForUser(tweet, scoreKey)) {
         a.setAttribute(SOCIAL_TAG, "1");
         continue;
       }
+
       const r = a.getBoundingClientRect();
       if (r.width < 2 && r.height < 2) continue;
       const slot = `${scoreKey}@${Math.round(r.top / 320)}_${Math.round(r.left / 200)}`;
@@ -1162,8 +1206,8 @@
       }
       slotSeen.add(slot);
       a.setAttribute(SOCIAL_TAG, "1");
-      if (userNameRow) userNameRow.setAttribute("data-veritas-x-userline", "1");
-      attachAccountScoreBadge(a, scoreKey, false, "veritas-account-badge--x");
+      attachAccountScoreBadge(a, scoreKey, false, "veritas-account-badge--x", true);
+      if (tweet) xTweetMarkBadgedForUser(tweet, scoreKey);
     }
   }
 
@@ -2191,6 +2235,11 @@
       scanInstagram._t = window.setTimeout(runIg, 500);
     });
     obs.observe(document.documentElement, { childList: true, subtree: true });
+    return;
+  }
+
+  /* X feed runs in the top frame; subframes rarely contain the timeline and duplicate work. */
+  if (isX && window.self !== window.top) {
     return;
   }
 

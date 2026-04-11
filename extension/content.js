@@ -525,6 +525,39 @@
         gap: 6px;
         pointer-events: none;
       }
+      /* X/Twitter: AI tick + fact-check logo in one horizontal cluster (no overlap) */
+      .veritas-fc-anchor.veritas-fc-anchor--x-actions {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        align-content: flex-start;
+        gap: 8px;
+      }
+      .veritas-fc-anchor.veritas-fc-anchor--x-actions .veritas-fc-popover {
+        flex: 0 0 100%;
+        width: min(340px, calc(100vw - 20px));
+        max-width: calc(100vw - 20px);
+      }
+      .veritas-fc-anchor.veritas-fc-anchor--x-actions .veritas-x-text-origin-row {
+        margin-bottom: 0;
+      }
+      .veritas-fc-anchor.veritas-fc-anchor--x-actions .veritas-fc-logo-btn {
+        padding: 4px 5px;
+      }
+      .veritas-fc-anchor.veritas-fc-anchor--x-actions .veritas-fc-svg {
+        width: 22px;
+        height: 24px;
+      }
+      .veritas-fc-anchor.veritas-fc-anchor--x-actions .veritas-x-text-origin {
+        width: 32px;
+        height: 28px;
+        border-radius: 9px;
+      }
+      .veritas-fc-anchor.veritas-fc-anchor--x-actions .veritas-x-text-origin svg {
+        width: 20px;
+        height: 20px;
+      }
       .veritas-fc-anchor > * {
         pointer-events: auto;
       }
@@ -1722,10 +1755,19 @@
     const host = ensurePostToolbarHost(el);
     if (!isX) attachCheckAiToHost(host, el);
 
+    /** X: mount AI tick beside fact-check logo (same anchor) so they never overlap */
+    let xOriginContainer = host;
+    if (isX) {
+      const fcAnchor = el.querySelector("[data-veritas-fc-wrap]");
+      if (fcAnchor) {
+        fcAnchor.classList.add("veritas-fc-anchor--x-actions");
+        xOriginContainer = fcAnchor;
+      }
+      mountXTextOriginRow(xOriginContainer);
+    }
+
     const text = postTextFromElement(el);
     if (!text || text.length < 10) return;
-
-    if (isX) mountXTextOriginRow(host);
 
     try {
       const result = await analyze(text);
@@ -1733,11 +1775,11 @@
       if (isX) {
         card.classList.add("veritas-card--x-hidden");
         card.setAttribute("data-veritas-x-score-card", "1");
-        setXTextOriginFromResult(host, result, card);
+        setXTextOriginFromResult(xOriginContainer, result, card);
       }
       host.appendChild(card);
     } catch {
-      if (isX) setXTextOriginError(host);
+      if (isX) setXTextOriginError(xOriginContainer);
       /* backend down */
     }
   }

@@ -56,8 +56,10 @@ export type User = {
   isHumanVerified: boolean;
   socialHandle?: string;
   socialUrl?: string;
-  /** Data URL from last successful face verification capture */
+  /** Data URL from API (not persisted in localStorage; prefer faceImageUrl) */
   faceCaptureDataUrl?: string;
+  /** Firebase Storage download URL stored in Firestore (`veritas_profiles`) */
+  faceImageUrl?: string;
   linkedinUrl?: string;
   redditUsername?: string;
   instagramHandle?: string;

@@ -200,6 +200,7 @@ export function ProfileMenu({
   username,
   avatarSrc,
   walletId,
+  onConnectWallet,
   subtextWhenEmpty = "Capture & Verify to save your photo here",
   subtextWhenPhoto = "Verification capture",
   footer,
@@ -208,6 +209,8 @@ export function ProfileMenu({
   avatarSrc: string;
   /** Veritas Wallet ID shown in profile after signup */
   walletId?: string;
+  /** Optional web3 / chain wallet connect (shown under Veritas Wallet ID) */
+  onConnectWallet?: () => void;
   subtextWhenEmpty?: string;
   subtextWhenPhoto?: string;
   footer?: (close: () => void) => React.ReactNode;
@@ -255,7 +258,7 @@ export function ProfileMenu({
       </button>
       {open ? (
         <div
-          className="absolute right-0 z-50 mt-2 w-[min(100vw-2.5rem,18rem)] rounded-2xl border border-white/10 bg-[#1a1a1a]/95 p-4 shadow-xl backdrop-blur-md"
+          className="absolute right-0 z-50 mt-2 w-[min(100vw-2.5rem,20rem)] rounded-2xl border border-white/10 bg-[#1a1a1a]/95 p-4 shadow-xl backdrop-blur-md"
           role="dialog"
           aria-label="Profile"
         >
@@ -287,6 +290,23 @@ export function ProfileMenu({
               </div>
             ) : null}
           </div>
+
+          <div className="mt-4 w-full border-t border-white/10 pt-4 text-left">
+            <div className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Wallet</div>
+            <div className="mt-1 text-sm font-semibold text-white">Connect Wallet (Optional)</div>
+            <p className="mt-1 text-xs leading-snug text-gray-400">
+              Enable portable trust and on-chain identity.
+            </p>
+            <button
+              type="button"
+              onClick={() => onConnectWallet?.()}
+              className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-semibold text-gray-100 transition hover:border-[#E91E63]/40 hover:bg-white/10"
+            >
+              Connect Wallet
+            </button>
+            <p className="mt-2 text-[10px] text-gray-500">This action is optional and demo-safe.</p>
+          </div>
+
           {footer ? (
             <div className="mt-4 border-t border-white/10 pt-3">{footer(() => setOpen(false))}</div>
           ) : null}

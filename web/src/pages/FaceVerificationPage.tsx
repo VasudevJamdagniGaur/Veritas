@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type User } from "../lib/api";
+import { saveFaceCaptureToFirebase } from "../lib/profileImageFirestore";
+import { stripFaceCaptureDataUrl } from "../lib/userFields";
 import { useApp } from "../state/appState";
 import { Button, CameraGlyph, Card, ProfileMenu, Shell } from "../components/Ui";
 
@@ -21,7 +23,7 @@ export default function FaceVerificationPage() {
 
   const canVerify = useMemo(() => Boolean(user?._id), [user]);
 
-  const avatarSrc = sessionCaptureUrl || user?.faceCaptureDataUrl || "";
+  const avatarSrc = sessionCaptureUrl || user?.faceImageUrl || user?.faceCaptureDataUrl || "";
 
   const stopCamera = () => {
     const s = streamRef.current;
@@ -119,8 +121,8 @@ export default function FaceVerificationPage() {
       if (pending) {
         try {
           const resp = await api.post<{ user: User }>("/auth/login", { username: pending });
-          setUser(resp.data.user);
-          u = resp.data.user;
+          setUser(stripFaceCaptureDataUrl(resp.data.user));
+          u = stripFaceCaptureDataUrl(resp.data.user);
         } catch (e: any) {
           setVerifyErr(e?.response?.data?.error || e?.message || "Backend not ready yet. Try again in a moment.");
           return;
@@ -139,17 +141,36 @@ export default function FaceVerificationPage() {
         userId: u._id,
         captureDataUrl,
       });
-      setUser(resp.data.user);
+      let merged = stripFaceCaptureDataUrl(resp.data.user);
+      if (captureDataUrl) {
+        try {
+          const faceImageUrl = await saveFaceCaptureToFirebase(u._id, captureDataUrl);
+          merged = { ...merged, faceImageUrl };
+        } catch (firebaseErr) {
+          // eslint-disable-next-line no-console
+          console.warn("Firebase profile image upload failed", firebaseErr);
+        }
+      }
+      setUser(merged);
       nav("/link-social");
     } catch (e: any) {
       // If backend is temporarily unavailable, keep the demo flow unblocked.
       setVerifyErr(e?.response?.data?.error || e?.message || "Verification failed (backend not ready).");
-      setUser({
+      let merged = stripFaceCaptureDataUrl({
         ...u,
         isHumanVerified: true,
         trustScore: Math.min(100, (u.trustScore ?? 50) + 15),
-        faceCaptureDataUrl: captureDataUrl || u.faceCaptureDataUrl,
       });
+      if (captureDataUrl) {
+        try {
+          const faceImageUrl = await saveFaceCaptureToFirebase(u._id, captureDataUrl);
+          merged = { ...merged, faceImageUrl };
+        } catch (firebaseErr) {
+          // eslint-disable-next-line no-console
+          console.warn("Firebase profile image upload failed", firebaseErr);
+        }
+      }
+      setUser(merged);
       nav("/link-social");
     } finally {
       setLoading(false);
@@ -176,6 +197,10 @@ export default function FaceVerificationPage() {
           username={user?.username || "Not logged in"}
           avatarSrc={avatarSrc}
           walletId={user?.walletId}
+          onConnectWallet={() => {
+            // eslint-disable-next-line no-console
+            console.log("Connect wallet clicked");
+          }}
           footer={(close) => (
             <>
               <button

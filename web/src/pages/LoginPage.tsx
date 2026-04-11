@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { api, type User } from "../lib/api";
 import { auth } from "../lib/firebase";
+import { stripFaceCaptureDataUrl } from "../lib/userFields";
 import { useApp } from "../state/appState";
 import { Card, Shell } from "../components/Ui";
 
@@ -36,7 +37,7 @@ export default function LoginPage() {
   const [err, setErr] = useState("");
 
   const finish = async (userResp: { user: User }) => {
-    setUser(userResp.user);
+    setUser(stripFaceCaptureDataUrl(userResp.user));
   };
 
   const onGoogle = async () => {

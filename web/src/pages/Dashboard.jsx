@@ -142,23 +142,92 @@ export function ExtensionCard({ onInstall }) {
   );
 }
 
+function SocialAccountRow({ label, connected, detail }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm text-gray-200">{label}</div>
+        <Pill
+          className={
+            connected
+              ? "bg-emerald-500/15 text-emerald-200 border-emerald-400/30"
+              : "bg-white/5 text-gray-200 border-white/10"
+          }
+        >
+          {connected ? "Connected" : "Not Connected"}
+        </Pill>
+      </div>
+      <div className="mt-2 break-words text-sm text-gray-300">
+        {connected ? detail : "Connect your handle from settings."}
+      </div>
+    </div>
+  );
+}
+
 export function AccountCard({ user }) {
-  const twitter = user.twitter || user.socialHandle || "";
-  const connected = Boolean(twitter);
+  const redditRaw = user.redditUsername || "";
+  const igRaw = user.instagramHandle || "";
+  const linkedinRaw = user.linkedinUrl || "";
+  const xFromFields = user.xHandle || user.twitter || "";
+  const xFromSocial =
+    user.socialHandle &&
+    (String(user.socialUrl || "").includes("x.com") || String(user.socialUrl || "").includes("twitter.com"))
+      ? user.socialHandle
+      : "";
+  const xDisplay = xFromFields || xFromSocial || "";
+  const xConnected = Boolean(
+    user.xHandle ||
+      user.twitter ||
+      (user.socialHandle &&
+        (String(user.socialUrl || "").includes("x.com") || String(user.socialUrl || "").includes("twitter.com")))
+  );
+
+  const redditDisplay = redditRaw ? `u/${String(redditRaw).replace(/^u\//i, "").replace(/^@/, "")}` : "";
+  const igDisplay = igRaw ? `@${String(igRaw).replace(/^@/, "")}` : "";
+  const xShow = xFromFields
+    ? `@${String(xFromFields).replace(/^@/, "")}`
+    : xFromSocial
+      ? String(xFromSocial).startsWith("@")
+        ? xFromSocial
+        : `@${xFromSocial}`
+      : "";
+
+  const rows = [
+    {
+      key: "reddit",
+      label: "Reddit",
+      connected: Boolean(redditRaw),
+      detail: redditDisplay,
+    },
+    {
+      key: "instagram",
+      label: "Instagram",
+      connected: Boolean(igRaw),
+      detail: igDisplay,
+    },
+    {
+      key: "x",
+      label: "X",
+      connected: xConnected,
+      detail: xShow,
+    },
+    {
+      key: "linkedin",
+      label: "LinkedIn",
+      connected: Boolean(linkedinRaw),
+      detail: linkedinRaw,
+    },
+  ];
 
   return (
     <Card>
       <div className="text-xs uppercase tracking-wide text-gray-400">Connected account</div>
       <div className="mt-1 text-lg font-semibold text-white">Social identity</div>
 
-      <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-sm text-gray-200">Twitter/X</div>
-          <Pill className={connected ? "bg-emerald-500/15 text-emerald-200 border-emerald-400/30" : "bg-white/5 text-gray-200 border-white/10"}>
-            {connected ? "Connected" : "Not Connected"}
-          </Pill>
-        </div>
-        <div className="mt-2 text-sm text-gray-300">{connected ? twitter : "Connect your handle from settings."}</div>
+      <div className="mt-4 grid gap-3">
+        {rows.map((row) => (
+          <SocialAccountRow key={row.key} label={row.label} connected={row.connected} detail={row.detail} />
+        ))}
       </div>
     </Card>
   );
@@ -202,25 +271,6 @@ export function RecentAnalysis({ posts }) {
         })}
         {posts.length === 0 ? <div className="text-sm text-gray-400">No recent analysis yet.</div> : null}
       </div>
-    </Card>
-  );
-}
-
-export function WalletCard({ onConnect }) {
-  return (
-    <Card>
-      <div className="text-xs uppercase tracking-wide text-gray-400">Wallet</div>
-      <div className="mt-1 text-lg font-semibold text-white">Connect Wallet (Optional)</div>
-      <p className="mt-2 text-sm text-gray-300">Enable portable trust and on-chain identity.</p>
-
-      <button
-        type="button"
-        onClick={onConnect}
-        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-gray-100 transition hover:border-[#E91E63]/40 hover:bg-black/30"
-      >
-        Connect Wallet
-      </button>
-      <div className="mt-2 text-xs text-gray-500">This action is optional and demo-safe.</div>
     </Card>
   );
 }
@@ -289,8 +339,12 @@ export default function Dashboard() {
           </div>
           <ProfileMenu
             username={viewUser.username}
-            avatarSrc={user?.faceCaptureDataUrl || ""}
+            avatarSrc={user?.faceImageUrl || user?.faceCaptureDataUrl || ""}
             walletId={user?.walletId}
+            onConnectWallet={() => {
+              // eslint-disable-next-line no-console
+              console.log("Connect wallet clicked");
+            }}
             subtextWhenEmpty="No verification photo on file"
             subtextWhenPhoto="Verification capture"
             footer={(close) => (
@@ -315,7 +369,6 @@ export default function Dashboard() {
         <ExtensionCard onInstall={() => { console.log("Install extension clicked"); nav("/instructions"); }} />
         <AccountCard user={viewUser} />
         <RecentAnalysis posts={posts} />
-        <WalletCard onConnect={() => console.log("Connect wallet clicked")} />
       </div>
     </Shell>
   );

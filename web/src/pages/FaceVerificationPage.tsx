@@ -3,13 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { api, type User } from "../lib/api";
 import { saveFaceCaptureToFirebase } from "../lib/profileImageFirestore";
 import { stripFaceCaptureDataUrl } from "../lib/userFields";
-import { deleteVeritasAccount } from "../lib/deleteAccount";
 import { useApp } from "../state/appState";
-import { Button, CameraGlyph, Card, ProfileMenu, Shell } from "../components/Ui";
+import { Button, Card, Shell } from "../components/Ui";
 
 export default function FaceVerificationPage() {
   const nav = useNavigate();
-  const { user, setUser, logout } = useApp();
+  const { user, setUser } = useApp();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -17,14 +16,8 @@ export default function FaceVerificationPage() {
   const [loading, setLoading] = useState(false);
   const [bootErr, setBootErr] = useState("");
   const [verifyErr, setVerifyErr] = useState("");
-  /** Latest frame from Capture & Verify (or restored from account after refresh). */
-  const [sessionCaptureUrl, setSessionCaptureUrl] = useState("");
-
-  const webcamSectionRef = useRef<HTMLDivElement>(null);
 
   const canVerify = useMemo(() => Boolean(user?._id), [user]);
-
-  const avatarSrc = sessionCaptureUrl || user?.faceImageUrl || user?.faceCaptureDataUrl || "";
 
   const stopCamera = () => {
     const s = streamRef.current;
@@ -134,7 +127,6 @@ export default function FaceVerificationPage() {
       }
     }
     const captureDataUrl = capture();
-    if (captureDataUrl) setSessionCaptureUrl(captureDataUrl);
     setVerifyErr("");
     setLoading(true);
     try {
@@ -178,64 +170,18 @@ export default function FaceVerificationPage() {
     }
   };
 
-  const goToCamera = (close: () => void) => {
-    close();
-    webcamSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    void startCamera();
-  };
-
   return (
     <Shell>
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="text-sm text-gray-400">Step 2</div>
-          <h1 className="mt-1 text-3xl font-semibold text-white">Face Verification</h1>
-          <p className="mt-2 max-w-2xl text-sm text-gray-300">
-            Proof-of-human: we capture a webcam frame and mark your account verified (no heavy ML).
-          </p>
-        </div>
-        <ProfileMenu
-          username={user?.username || "Not logged in"}
-          avatarSrc={avatarSrc}
-          walletId={user?.walletId}
-          onDeleteAccount={
-            user?._id
-              ? async (close) => {
-                  close();
-                  try {
-                    await deleteVeritasAccount(user._id);
-                  } catch (e) {
-                    // eslint-disable-next-line no-console
-                    console.error(e);
-                    window.alert("Could not delete your account. Try again.");
-                    return;
-                  }
-                  logout();
-                  localStorage.removeItem("veritas.pendingUsername");
-                  nav("/");
-                }
-              : undefined
-          }
-          footer={(close) => (
-            <>
-              <button
-                type="button"
-                onClick={() => goToCamera(close)}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
-              >
-                <CameraGlyph />
-                Camera
-              </button>
-              <p className="mt-2 text-center text-[11px] leading-snug text-gray-500">
-                Opens the live webcam below and restarts the camera if needed
-              </p>
-            </>
-          )}
-        />
+      <div className="mb-6">
+        <div className="text-sm text-gray-400">Step 2</div>
+        <h1 className="mt-1 text-3xl font-semibold text-white">Face Verification</h1>
+        <p className="mt-2 max-w-2xl text-sm text-gray-300">
+          Proof-of-human: we capture a webcam frame and mark your account verified (no heavy ML).
+        </p>
       </div>
 
       <div className="grid gap-5 md:grid-cols-2">
-        <div ref={webcamSectionRef}>
+        <div>
           <Card>
             <div className="text-sm font-semibold text-white">Webcam</div>
             <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-black/40">

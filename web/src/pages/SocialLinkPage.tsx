@@ -1,24 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type User } from "../lib/api";
-import { deleteVeritasAccount } from "../lib/deleteAccount";
 import { useApp } from "../state/appState";
-import { Button, Card, Input, ProfileMenu, Shell } from "../components/Ui";
+import { Button, Card, Input, Shell } from "../components/Ui";
 
 export default function SocialLinkPage() {
   const nav = useNavigate();
-  const { user, setUser, logout, refreshUser } = useApp();
+  const { user, setUser, refreshUser } = useApp();
   const [linkedinUrl, setLinkedinUrl] = useState("");
   const [redditUsername, setRedditUsername] = useState("");
   const [instagramHandle, setInstagramHandle] = useState("");
   const [xHandle, setXHandle] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
-
-  const avatarSrc = useMemo(
-    () => user?.faceImageUrl || user?.faceCaptureDataUrl || "",
-    [user?.faceImageUrl, user?.faceCaptureDataUrl]
-  );
 
   useEffect(() => {
     if (!user) {
@@ -79,53 +73,13 @@ export default function SocialLinkPage() {
 
   return (
     <Shell>
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="text-sm text-gray-400">Step 3</div>
-          <h1 className="mt-1 text-3xl font-semibold text-white">Link your social accounts</h1>
-          <p className="mt-2 max-w-2xl text-sm text-gray-300">
-            Connect the profiles you use so Veritas can align your trust layer with your public identity. You can add or
-            change these later from the dashboard.
-          </p>
-        </div>
-        <ProfileMenu
-          username={user?.username || "Not logged in"}
-          avatarSrc={avatarSrc}
-          walletId={user?.walletId}
-          onDeleteAccount={
-            user?._id
-              ? async (close) => {
-                  close();
-                  try {
-                    await deleteVeritasAccount(user._id);
-                  } catch (e) {
-                    // eslint-disable-next-line no-console
-                    console.error(e);
-                    window.alert("Could not delete your account. Try again.");
-                    return;
-                  }
-                  logout();
-                  localStorage.removeItem("veritas.pendingUsername");
-                  nav("/");
-                }
-              : undefined
-          }
-          subtextWhenEmpty="No verification photo on file"
-          subtextWhenPhoto="Verification capture"
-          footer={(close) => (
-            <button
-              type="button"
-              onClick={() => {
-                close();
-                logout();
-                nav("/");
-              }}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
-            >
-              Log out
-            </button>
-          )}
-        />
+      <div className="mb-6">
+        <div className="text-sm text-gray-400">Step 3</div>
+        <h1 className="mt-1 text-3xl font-semibold text-white">Link your social accounts</h1>
+        <p className="mt-2 max-w-2xl text-sm text-gray-300">
+          Connect the profiles you use so Veritas can align your trust layer with your public identity. You can add or
+          change these later from the dashboard.
+        </p>
       </div>
 
       <Card className="max-w-2xl">

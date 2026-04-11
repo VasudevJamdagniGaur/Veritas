@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { deleteVeritasAccount } from "../lib/deleteAccount";
+import { isSocialStepComplete } from "../lib/socialOnboarding";
 import { useApp } from "../state/appState";
 import SocialIdentityCard from "../components/SocialIdentityCard.jsx";
 import { ProfileMenu, Shell } from "../components/Ui";
@@ -139,7 +140,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!user) return; // allow mock dashboard for demo visuals even without login
-    if (!user.isHumanVerified) nav("/verify");
+    if (!user.isHumanVerified) {
+      nav("/verify");
+      return;
+    }
+    if (user._id && !isSocialStepComplete(user._id)) {
+      nav("/link-social");
+    }
   }, [user, nav]);
 
   useEffect(() => {

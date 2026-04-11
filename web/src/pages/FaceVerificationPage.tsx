@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type User } from "../lib/api";
 import { setLocalFaceCapture } from "../lib/localFaceCapture";
+import { isSocialStepComplete } from "../lib/socialOnboarding";
 import { stripFaceCaptureDataUrl } from "../lib/userFields";
 import { useApp } from "../state/appState";
 import { Button, Card, Shell } from "../components/Ui";
@@ -63,9 +64,10 @@ export default function FaceVerificationPage() {
   }, []);
 
   useEffect(() => {
-    // If we already have a user and they're verified, skip ahead.
-    if (user?.isHumanVerified) nav("/dashboard");
-  }, [user?.isHumanVerified, nav]);
+    if (!user?.isHumanVerified || !user._id) return;
+    // After verify, always go to Step 3 first unless this user already finished it (then dashboard).
+    nav(isSocialStepComplete(user._id) ? "/dashboard" : "/link-social");
+  }, [user?.isHumanVerified, user?._id, nav]);
 
   useEffect(() => {
     // If user is missing, try to create/login using the username captured on the signup screen.

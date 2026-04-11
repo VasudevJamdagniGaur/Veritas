@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { api, type User } from "../lib/api";
 import { getLocalFaceCapture, removeLocalFaceCapture, setLocalFaceCapture } from "../lib/localFaceCapture";
+import { clearSocialStepForUser } from "../lib/socialOnboarding";
 import { stripFaceCaptureDataUrl } from "../lib/userFields";
 
 type AppState = {
@@ -58,7 +59,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
-    if (user?._id) removeLocalFaceCapture(user._id);
+    if (user?._id) {
+      removeLocalFaceCapture(user._id);
+      clearSocialStepForUser(user._id);
+    }
     setUser(null);
   };
 

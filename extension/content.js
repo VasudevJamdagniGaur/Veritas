@@ -10,6 +10,8 @@
 
   let reelVideoIdSeq = 0;
   let amazonReviewUid = 0;
+  let activeScoreReviewPopover = null;
+  let scorePopoverAnchorBadge = null;
 
   const host =
     typeof location !== "undefined" ? location.hostname.replace(/^www\./, "") : "";
@@ -766,6 +768,63 @@
         opacity: 0.75;
         font-weight: 600;
       }
+
+      /* Account score: Community Notes–style review (left-click badge) */
+      .veritas-ig-realness[data-veritas-score-interactive="1"] {
+        cursor: pointer;
+      }
+      .veritas-account-score-popover {
+        position: fixed;
+        z-index: 2147483647;
+        min-width: 220px;
+        max-width: min(300px, calc(100vw - 24px));
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(22, 22, 26, 0.98);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+        font-size: 12px;
+        color: #e5e7eb;
+        line-height: 1.4;
+        box-sizing: border-box;
+      }
+      .veritas-account-score-popover__hint {
+        font-size: 11px;
+        color: #9ca3af;
+        margin-bottom: 10px;
+      }
+      .veritas-account-score-popover__row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .veritas-account-score-popover button[type="button"] {
+        flex: 1;
+        min-width: 100px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.08);
+        color: #f3f4f6;
+        font-family: inherit;
+      }
+      .veritas-account-score-popover button[data-veritas-review="helpful"] {
+        border-color: rgba(52, 211, 153, 0.5);
+        background: rgba(16, 185, 129, 0.15);
+        color: #a7f3d0;
+      }
+      .veritas-account-score-popover button[data-veritas-review="wrong"] {
+        border-color: rgba(248, 113, 113, 0.5);
+        background: rgba(239, 68, 68, 0.15);
+        color: #fecaca;
+      }
+      .veritas-account-score-popover button[type="button"]:hover {
+        filter: brightness(1.09);
+      }
     `;
     document.documentElement.appendChild(style);
   }
@@ -1020,6 +1079,17 @@
    * On plain http pages (e.g. mock feed), direct fetch still works as a fallback.
    */
   async function fetchAccountScore(scoreKey) {
+    /** Demo / partner profile: always show max authenticity on Instagram. */
+    if (typeof scoreKey === "string" && scoreKey.toLowerCase() === "geekroom__") {
+      const pinned = Promise.resolve({
+        realnessScore: 100,
+        source: "veritas-override",
+        bot_probability: 0,
+      });
+      accountScoreCache.set(scoreKey, pinned);
+      return pinned;
+    }
+
     if (accountScoreCache.has(scoreKey)) return accountScoreCache.get(scoreKey);
     const p = (async () => {
       try {
@@ -1134,6 +1204,132 @@
     return { score: clamp(b + 20, 0, 100), boosted: true };
   }
 
+  const SCORE_REVIEW_LS = "veritas.scoreReview.v1.";
+  function scoreReviewStorageKey(scoreKey) {
+    return SCORE_REVIEW_LS + encodeURIComponent(scoreKey);
+  }
+  function getStoredScoreReview(scoreKey) {
+    try {
+      const raw = localStorage.getItem(scoreReviewStorageKey(scoreKey));
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+  function setStoredScoreReview(scoreKey, verdict, displayScore) {
+    try {
+      localStorage.setItem(
+        scoreReviewStorageKey(scoreKey),
+        JSON.stringify({ verdict, score: displayScore, at: Date.now() })
+      );
+    } catch {
+      /* quota */
+    }
+  }
+
+  function closeActiveScoreReviewPopover() {
+    if (activeScoreReviewPopover && activeScoreReviewPopover.parentNode) {
+      activeScoreReviewPopover.remove();
+    }
+    activeScoreReviewPopover = null;
+    scorePopoverAnchorBadge = null;
+    document.removeEventListener("mousedown", onDocMouseDownForScorePopover, true);
+    document.removeEventListener("keydown", onKeyDownForScorePopover, true);
+  }
+
+  function onDocMouseDownForScorePopover(ev) {
+    if (!activeScoreReviewPopover) return;
+    if (activeScoreReviewPopover.contains(ev.target)) return;
+    if (scorePopoverAnchorBadge && (ev.target === scorePopoverAnchorBadge || scorePopoverAnchorBadge.contains(ev.target))) {
+      return;
+    }
+    closeActiveScoreReviewPopover();
+  }
+
+  function onKeyDownForScorePopover(ev) {
+    if (ev.key === "Escape") closeActiveScoreReviewPopover();
+  }
+
+  function openScoreReviewPopover(badge, scoreKey, displayScore) {
+    closeActiveScoreReviewPopover();
+    injectStyleOnce();
+    const prev = getStoredScoreReview(scoreKey);
+    const pop = document.createElement("div");
+    pop.className = "veritas-account-score-popover";
+    pop.setAttribute("data-veritas-score-review-popover", "1");
+
+    const row = document.createElement("div");
+    row.className = "veritas-account-score-popover__row";
+
+    if (prev && (prev.verdict === "helpful" || prev.verdict === "wrong")) {
+      const hint = document.createElement("div");
+      hint.className = "veritas-account-score-popover__hint";
+      hint.textContent =
+        prev.verdict === "helpful"
+          ? `You marked this score (${displayScore}) as helpful.`
+          : `You marked this score (${displayScore}) as inaccurate.`;
+      pop.appendChild(hint);
+      const closeBtn = document.createElement("button");
+      closeBtn.type = "button";
+      closeBtn.textContent = "Close";
+      closeBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        closeActiveScoreReviewPopover();
+      });
+      row.appendChild(closeBtn);
+    } else {
+      const bHelp = document.createElement("button");
+      bHelp.type = "button";
+      bHelp.dataset.veritasReview = "helpful";
+      bHelp.textContent = "Helpful";
+      bHelp.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setStoredScoreReview(scoreKey, "helpful", displayScore);
+        closeActiveScoreReviewPopover();
+      });
+      const bWrong = document.createElement("button");
+      bWrong.type = "button";
+      bWrong.dataset.veritasReview = "wrong";
+      bWrong.textContent = "Wrong";
+      bWrong.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setStoredScoreReview(scoreKey, "wrong", displayScore);
+        closeActiveScoreReviewPopover();
+      });
+      row.appendChild(bHelp);
+      row.appendChild(bWrong);
+    }
+
+    pop.appendChild(row);
+    document.body.appendChild(pop);
+    activeScoreReviewPopover = pop;
+    scorePopoverAnchorBadge = badge;
+
+    const positionPopover = () => {
+      const rect = badge.getBoundingClientRect();
+      const margin = 8;
+      let left = rect.left;
+      let top = rect.bottom + 6;
+      const w = pop.offsetWidth;
+      const h = pop.offsetHeight;
+      if (left + w > window.innerWidth - margin) left = window.innerWidth - w - margin;
+      if (left < margin) left = margin;
+      if (top + h > window.innerHeight - margin && rect.top > h + margin) {
+        top = rect.top - h - 6;
+      }
+      if (top < margin) top = margin;
+      pop.style.left = `${Math.round(left)}px`;
+      pop.style.top = `${Math.round(top)}px`;
+    };
+    positionPopover();
+    requestAnimationFrame(positionPopover);
+
+    document.addEventListener("mousedown", onDocMouseDownForScorePopover, true);
+    document.addEventListener("keydown", onKeyDownForScorePopover, true);
+  }
+
   function applyAccountBadgeTitles(badge, score, src, botPct, verifiedBoost) {
     let suffix = verifiedBoost ? " · +20 verified account (max 100)" : "";
     if (src === "xgboost") {
@@ -1157,7 +1353,30 @@
     badge.className = "veritas-ig-realness veritas-ig-realness--loading";
     if (extraBadgeClass) badge.classList.add(extraBadgeClass);
     badge.textContent = "…";
-    badge.title = "Veritas: account authenticity (0–100, higher = more human)";
+    badge.title = "Veritas: account authenticity (0–100, higher = more human) — click to review";
+    badge.setAttribute("data-veritas-score-key", scoreKey);
+    badge.setAttribute("data-veritas-score-interactive", "1");
+    badge.setAttribute("role", "button");
+    badge.setAttribute("tabindex", "0");
+
+    const onBadgeActivate = (ev) => {
+      if (ev.type === "keydown" && ev.key !== "Enter" && ev.key !== " ") return;
+      if (ev.type === "click" && ev.button !== 0) return;
+      if (ev.type === "keydown") ev.preventDefault();
+      const raw = badge.getAttribute("data-veritas-display-score");
+      if (!raw || raw === "…") return;
+      const n = Number(raw);
+      if (Number.isNaN(n)) return;
+      if (activeScoreReviewPopover && scorePopoverAnchorBadge === badge) {
+        closeActiveScoreReviewPopover();
+        return;
+      }
+      ev.preventDefault();
+      ev.stopPropagation();
+      openScoreReviewPopover(badge, scoreKey, n);
+    };
+    badge.addEventListener("click", onBadgeActivate);
+    badge.addEventListener("keydown", onBadgeActivate);
 
     if (useReelWrap && anchor.parentNode) {
       const wrap = document.createElement("span");
@@ -1183,19 +1402,22 @@
             ? clamp(Math.round(data.bot_probability * 100), 0, 100)
             : null;
         badge.textContent = String(score);
+        badge.setAttribute("data-veritas-display-score", String(score));
         badge.classList.remove("veritas-ig-realness--loading");
         applyRealnessClass(badge, score);
         applyAccountBadgeTitles(badge, score, data.source || "api", botPct, boosted);
+        badge.title += " — click to review";
       })
       .catch(() => {
         const raw = localMockRealness(scoreKey);
         const { score, boosted } = applyVerifiedAccountBonus(raw, anchor);
         badge.textContent = String(score);
+        badge.setAttribute("data-veritas-display-score", String(score));
         badge.classList.remove("veritas-ig-realness--loading");
         applyRealnessClass(badge, score);
         badge.title = boosted
-          ? `Veritas: ${score}/100 (fallback) · +20 verified account (max 100)`
-          : `Veritas: ${score}/100 (fallback)`;
+          ? `Veritas: ${score}/100 (fallback) · +20 verified account (max 100) — click to review`
+          : `Veritas: ${score}/100 (fallback) — click to review`;
       });
   }
 

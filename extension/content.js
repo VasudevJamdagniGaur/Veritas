@@ -359,55 +359,40 @@
         color: #d1d5db;
         font-size: 12px;
       }
-      .veritas-check-ai-topbar {
-        display: flex;
-        align-items: center;
-        margin: -2px 0 6px;
-      }
-      .veritas-check-ai-back-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 3px 8px;
-        margin: 0 0 0 -6px;
-        border: none;
-        border-radius: 8px;
-        background: transparent;
-        color: #9ca3af;
-        font-size: 11px;
-        font-weight: 600;
-        font-family: inherit;
-        cursor: pointer;
-      }
-      .veritas-check-ai-back-btn:hover {
-        color: #e5e7eb;
-        background: rgba(255, 255, 255, 0.06);
-      }
-      .veritas-check-ai-back-btn:focus-visible {
-        outline: 2px solid #f472b6;
-        outline-offset: 1px;
-      }
-
-      /* Instagram full-screen Reel: pin Check AI to top-right of the video frame */
+      /* Instagram Reels: fixed portal on document.body (above IG pause/play layer) */
       .veritas-ig-reel-overlay {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        z-index: 2147483645;
+        position: fixed;
+        z-index: 2147483646;
         display: flex;
         flex-direction: column;
         align-items: flex-end;
         gap: 8px;
-        max-width: min(340px, calc(100% - 20px));
+        max-width: min(340px, calc(100vw - 16px));
+        pointer-events: none;
+        isolation: isolate;
+      }
+      .veritas-ig-reel-overlay .veritas-check-ai-panel,
+      .veritas-ig-reel-overlay .veritas-check-ai-row,
+      .veritas-ig-reel-overlay .veritas-check-ai-btn {
         pointer-events: auto;
       }
       .veritas-ig-reel-overlay .veritas-check-ai-panel {
         margin-top: 0;
         width: 100%;
       }
+      .veritas-ig-reel-overlay .veritas-check-ai-row {
+        position: relative;
+        z-index: 2;
+      }
       .veritas-ig-reel-overlay .veritas-check-ai-btn {
+        position: relative;
+        z-index: 3;
         box-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
         backdrop-filter: blur(6px);
+        cursor: pointer;
+        touch-action: manipulation;
+        -webkit-user-select: none;
+        user-select: none;
       }
 
       /* Amazon-only: review trust dock */
@@ -788,6 +773,19 @@
       /* LinkedIn default UI is light gray/white — translucent pills are illegible. */
       .veritas-account-badge--linkedin.veritas-ig-realness {
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.06);
+        display: inline-flex;
+        flex-shrink: 0;
+        vertical-align: middle;
+        margin-left: 8px;
+        margin-right: 0;
+        align-self: center;
+      }
+      h1:has(> .veritas-account-badge--linkedin) {
+        display: inline-flex !important;
+        flex-direction: row !important;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0 6px;
       }
       .veritas-account-badge--linkedin.veritas-ig-realness--loading {
         background: #e5e7eb !important;
@@ -1109,6 +1107,77 @@
     }
   }
 
+  /** /in/vanity only — skip /overlay/contact-info, details, recent-activity, etc. */
+  function isLinkedInProfileRootHref(href) {
+    if (!href || href === "#" || href.startsWith("javascript:")) return false;
+    try {
+      const u = href.startsWith("http") ? new URL(href) : new URL(href, "https://www.linkedin.com");
+      const h = u.hostname.replace(/^www\./, "");
+      if (!h.endsWith("linkedin.com")) return false;
+      const parts = u.pathname.split("/").filter(Boolean);
+      return parts[0] === "in" && Boolean(parts[1]) && parts.length === 2;
+    } catch {
+      return false;
+    }
+  }
+
+  function linkedinProfileVanityFromPath() {
+    try {
+      const parts = (location.pathname || "").split("/").filter(Boolean);
+      if (parts[0] !== "in" || !parts[1]) return null;
+      const v = parts[1];
+      if (LI_RESERVED.has(v.toLowerCase())) return null;
+      if (!/^[a-zA-Z0-9\-_%]{2,120}$/.test(v)) return null;
+      return `li:${decodeURIComponent(v)}`;
+    } catch {
+      return null;
+    }
+  }
+
+  function findLinkedInProfileNameHeading() {
+    const main = document.querySelector("main") || document.body;
+    const h1s = Array.from(main.querySelectorAll("h1"));
+    let best = null;
+    let bestScore = -1;
+    for (const h1 of h1s) {
+      const text = (h1.textContent || "").replace(/\s+/g, " ").trim();
+      if (text.length < 2 || text.length > 120) continue;
+      const r = h1.getBoundingClientRect();
+      if (r.width < 40 || r.height < 12) continue;
+      if (r.bottom < 0 || r.top > window.innerHeight) continue;
+      if (h1.closest("[data-veritas-handle-wrap]")) continue;
+      if (h1.querySelector(".veritas-account-badge--linkedin")) continue;
+      /* Prefer the large name at the top of the profile card. */
+      const score = r.width * Math.min(r.height, 64) - r.top * 4;
+      if (score > bestScore) {
+        bestScore = score;
+        best = h1;
+      }
+    }
+    return best;
+  }
+
+  function isLinkedInNameAnchor(a) {
+    if (!isLinkedInProfileRootHref(a.getAttribute("href") || "")) return false;
+    if (isLikelyGenericAvatarLink(a)) return false;
+    const r = a.getBoundingClientRect();
+    if (r.height > 96) return false;
+    const text = (a.textContent || "").replace(/\s+/g, " ").trim();
+    if (text.length < 2 || text.length > 90) return false;
+    const lower = text.toLowerCase();
+    if (
+      lower.includes("contact info") ||
+      lower === "follow" ||
+      lower === "message" ||
+      lower === "connect" ||
+      lower === "pending" ||
+      lower.startsWith("follow ")
+    ) {
+      return false;
+    }
+    return true;
+  }
+
   function redditUserFromHref(href) {
     if (!href || href === "#" || href.startsWith("javascript:")) return null;
     try {
@@ -1413,7 +1482,14 @@
     }
   }
 
-  function attachAccountScoreBadge(anchor, scoreKey, useReelWrap, extraBadgeClass, insertBadgeBeforeAnchor) {
+  function attachAccountScoreBadge(
+    anchor,
+    scoreKey,
+    useReelWrap,
+    extraBadgeClass,
+    insertBadgeBeforeAnchor,
+    insertInside
+  ) {
     const badge = document.createElement("span");
     badge.className = "veritas-ig-realness veritas-ig-realness--loading";
     if (extraBadgeClass) badge.classList.add(extraBadgeClass);
@@ -1443,7 +1519,10 @@
     badge.addEventListener("click", onBadgeActivate);
     badge.addEventListener("keydown", onBadgeActivate);
 
-    if (useReelWrap && anchor.parentNode) {
+    if (insertInside) {
+      anchor.appendChild(badge);
+      badge.classList.add("veritas-ig-realness--next-to-handle");
+    } else if (useReelWrap && anchor.parentNode) {
       const wrap = document.createElement("span");
       wrap.setAttribute("data-veritas-handle-wrap", "1");
       wrap.style.cssText =
@@ -1562,15 +1641,34 @@
 
   function scanLinkedInAccountBadges() {
     injectStyleOnce();
+    const slotSeen = new Set();
+
+    /* Profile page: name is usually a block <h1>, not the Contact info link. */
+    const profileKey = linkedinProfileVanityFromPath();
+    if (profileKey) {
+      const h1 = findLinkedInProfileNameHeading();
+      if (h1 && h1.getAttribute(SOCIAL_TAG) !== "1") {
+        const r = h1.getBoundingClientRect();
+        const slot = `${profileKey}@h1@${Math.round(r.top / 280)}_${Math.round(r.left / 200)}`;
+        slotSeen.add(slot);
+        h1.setAttribute(SOCIAL_TAG, "1");
+        attachAccountScoreBadge(h1, profileKey, false, "veritas-account-badge--linkedin", false, true);
+      }
+    }
+
     const anchors = Array.from(
       document.querySelectorAll('a[href*="/in/"], a[href*="linkedin.com/in/"]')
     );
-    const slotSeen = new Set();
     for (const a of anchors) {
       if (a.getAttribute(SOCIAL_TAG) === "1") continue;
+      if (a.querySelector?.(".veritas-account-badge--linkedin")) continue;
+      if (a.closest?.("h1")?.querySelector?.(".veritas-account-badge--linkedin")) {
+        a.setAttribute(SOCIAL_TAG, "1");
+        continue;
+      }
       const scoreKey = linkedinVanityFromHref(a.getAttribute("href") || "");
       if (!scoreKey) continue;
-      if (isLikelyGenericAvatarLink(a)) continue;
+      if (!isLinkedInNameAnchor(a)) continue;
       const r = a.getBoundingClientRect();
       if (r.width < 2 && r.height < 2) continue;
       const slot = `${scoreKey}@${Math.round(r.top / 280)}_${Math.round(r.left / 200)}`;
@@ -1580,7 +1678,7 @@
       }
       slotSeen.add(slot);
       a.setAttribute(SOCIAL_TAG, "1");
-      attachAccountScoreBadge(a, scoreKey, false, "veritas-account-badge--linkedin");
+      attachAccountScoreBadge(a, scoreKey, true, "veritas-account-badge--linkedin");
     }
   }
 
@@ -1642,7 +1740,7 @@
     const videos =
       root instanceof HTMLVideoElement
         ? [root]
-        : Array.from(root.querySelectorAll("video"));
+        : Array.from(root.querySelectorAll?.("video") || []);
     for (const v of videos) {
       const r = v.getBoundingClientRect();
       if (r.width * r.height < 64 * 64) continue;
@@ -1662,7 +1760,7 @@
         const dataUrl = c.toDataURL("image/jpeg", 0.88);
         if (dataUrl && dataUrl.length > 400) return { imageBase64: dataUrl };
       } catch {
-        /* CORS-tainted canvas or not ready */
+        /* CORS-tainted canvas or not ready — Instagram CDN videos hit this often */
       }
     }
     return null;
@@ -1688,19 +1786,150 @@
     }
   }
 
+  /** Map an element rect into the top-level viewport (handles iframe content scripts). */
+  function getRectInTopViewport(el) {
+    const r = el.getBoundingClientRect();
+    let left = r.left;
+    let top = r.top;
+    let win = window;
+    try {
+      while (win !== win.top) {
+        const frame = win.frameElement;
+        if (!frame) break;
+        const fr = frame.getBoundingClientRect();
+        left += fr.left;
+        top += fr.top;
+        win = win.parent;
+      }
+    } catch {
+      /* cross-origin parent access — use local rect */
+    }
+    return { left, top, width: r.width, height: r.height };
+  }
+
+  function waitTwoAnimationFrames() {
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
+  }
+
   /**
-   * Prefer a video frame; else largest visible image (canvas or URL for background fetch).
-   * @returns {{ imageBase64?: string, imageUrl?: string } | null}
+   * Crop a full-tab screenshot data URL to an element’s on-screen box.
+   * @returns {Promise<{ imageBase64: string } | null>}
    */
-  function captureMediaForCheckAi(root) {
+  function cropDataUrlToRect(dataUrl, rect) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const dpr = window.devicePixelRatio || 1;
+          let sx = Math.round(rect.left * dpr);
+          let sy = Math.round(rect.top * dpr);
+          let sw = Math.round(rect.width * dpr);
+          let sh = Math.round(rect.height * dpr);
+          sx = Math.max(0, Math.min(sx, img.naturalWidth - 1));
+          sy = Math.max(0, Math.min(sy, img.naturalHeight - 1));
+          sw = Math.max(1, Math.min(sw, img.naturalWidth - sx));
+          sh = Math.max(1, Math.min(sh, img.naturalHeight - sy));
+          const maxS = 1280;
+          const scale = Math.min(1, maxS / Math.max(sw, sh));
+          const tw = Math.max(1, Math.round(sw * scale));
+          const th = Math.max(1, Math.round(sh * scale));
+          const c = document.createElement("canvas");
+          c.width = tw;
+          c.height = th;
+          const ctx = c.getContext("2d");
+          ctx.drawImage(img, sx, sy, sw, sh, 0, 0, tw, th);
+          const out = c.toDataURL("image/jpeg", 0.88);
+          if (out && out.length > 400) resolve({ imageBase64: out });
+          else resolve(null);
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = dataUrl;
+    });
+  }
+
+  /**
+   * Screenshot fallback when canvas cannot read Instagram/CDN media (CORS).
+   * Temporarily hides Veritas overlays so they are not in the crop.
+   * @returns {Promise<{ imageBase64: string } | null>}
+   */
+  async function captureTabRegionForElement(el, hideEls) {
+    if (!el || !el.isConnected) return null;
+    const restore = [];
+    for (const node of hideEls || []) {
+      if (!node) continue;
+      const prev = node.style.visibility;
+      node.style.visibility = "hidden";
+      restore.push(() => {
+        node.style.visibility = prev;
+      });
+    }
+    try {
+      await waitTwoAnimationFrames();
+      const bg = await sendMessageToExtension({ type: "VERITAS_CAPTURE_TAB" });
+      if (!bg || bg.ok !== true || typeof bg.dataUrl !== "string") return null;
+      return await cropDataUrlToRect(bg.dataUrl, getRectInTopViewport(el));
+    } catch {
+      return null;
+    } finally {
+      for (const fn of restore) fn();
+    }
+  }
+
+  function pickCaptureVideo(root) {
+    if (root instanceof HTMLVideoElement) return root;
+    if (root && typeof root.querySelector === "function") {
+      const videos = Array.from(root.querySelectorAll("video"));
+      let best = null;
+      let bestArea = 0;
+      for (const v of videos) {
+        const r = v.getBoundingClientRect();
+        const area = r.width * r.height;
+        if (area < 64 * 64) continue;
+        if (area > bestArea) {
+          bestArea = area;
+          best = v;
+        }
+      }
+      if (best) return best;
+    }
+    return findPrimaryInstagramReelVideo();
+  }
+
+  /**
+   * Prefer a video frame; else largest visible image; else tab screenshot crop
+   * (required for Instagram Reels — CDN video frames taint canvas).
+   * @returns {Promise<{ imageBase64?: string, imageUrl?: string } | null>}
+   */
+  async function captureMediaForCheckAi(root, opts) {
+    const hideEls = opts?.hideEls || [];
     const v = tryCaptureVideoFrame(root);
     if (v) return v;
-    const img = pickLargestVisibleImage(root);
-    if (!img) return null;
-    const dataUrl = tryCaptureImageDataUrl(img);
-    if (dataUrl) return { imageBase64: dataUrl };
-    const url = img.currentSrc || img.getAttribute("src") || "";
-    if (url && !url.startsWith("blob:") && /^https?:\/\//i.test(url)) return { imageUrl: url };
+
+    const imgRoot =
+      root && typeof root.querySelector === "function"
+        ? root
+        : document.documentElement;
+    const img = pickLargestVisibleImage(imgRoot);
+    if (img) {
+      const dataUrl = tryCaptureImageDataUrl(img);
+      if (dataUrl) return { imageBase64: dataUrl };
+      const url = img.currentSrc || img.getAttribute("src") || "";
+      if (url && !url.startsWith("blob:") && /^https?:\/\//i.test(url)) {
+        return { imageUrl: url };
+      }
+    }
+
+    const video = pickCaptureVideo(root);
+    if (video) {
+      const shot = await captureTabRegionForElement(video, hideEls);
+      if (shot) return shot;
+    }
+
     return null;
   }
 
@@ -1714,7 +1943,7 @@
     return panel;
   }
 
-  function renderCheckAiResult(panel, { aiProbability, verdict, explanation }, checkAiBtn) {
+  function renderCheckAiResult(panel, { aiProbability, verdict, explanation }) {
     const raw = Math.round(Number(aiProbability));
     /** Check AI returns a random percent 1–10 on the usual 0–100 scale; other callers may send any 0–100 value. */
     let displayPct;
@@ -1728,7 +1957,6 @@
     }
     const isAi = verdict === "AI-generated";
     panel.textContent = "";
-    if (checkAiBtn) panel.appendChild(buildCheckAiBackBar(panel, checkAiBtn));
     const card = document.createElement("div");
     card.className = "veritas-check-ai-card";
     const head = document.createElement("div");
@@ -1814,8 +2042,77 @@
     throw new Error("Could not load image (extension background unreachable). Refresh the page and try again.");
   }
 
+  function stopIgEventSteal(ev) {
+    try {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (typeof ev.stopImmediatePropagation === "function") ev.stopImmediatePropagation();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function eventPathHasReelCheckAi(ev) {
+    const path = typeof ev.composedPath === "function" ? ev.composedPath() : null;
+    if (path && path.length) {
+      return path.some(
+        (n) => n && n.nodeType === 1 && n.getAttribute?.("data-veritas-reel-checkai-host") === "1"
+      );
+    }
+    const t = ev.target;
+    return !!(t && t.closest && t.closest("[data-veritas-reel-checkai-host]"));
+  }
+
+  /**
+   * IG registers pause/play on document (capture). That runs before our button handlers.
+   * Intercept on window (capture) first: block IG, then run Check AI ourselves.
+   */
+  function ensureIgReelWindowGuard() {
+    if (window.__veritasIgReelWindowGuard) return;
+    window.__veritasIgReelWindowGuard = true;
+
+    const blockTypes = [
+      "pointerdown",
+      "pointerup",
+      "mousedown",
+      "mouseup",
+      "touchstart",
+      "touchend",
+      "click",
+      "dblclick",
+      "contextmenu",
+    ];
+    for (const type of blockTypes) {
+      window.addEventListener(
+        type,
+        (ev) => {
+          if (!eventPathHasReelCheckAi(ev)) return;
+          /* Stop before document/IG capture handlers see the event. */
+          try {
+            ev.stopPropagation();
+            if (type === "click" || type === "dblclick" || type === "contextmenu") {
+              ev.preventDefault();
+            }
+          } catch {
+            /* ignore */
+          }
+          if (type !== "click") return;
+          const path = typeof ev.composedPath === "function" ? ev.composedPath() : [];
+          const btn =
+            path.find((n) => n && n.classList && n.classList.contains("veritas-check-ai-btn")) ||
+            (ev.target && ev.target.closest && ev.target.closest(".veritas-check-ai-btn"));
+          if (btn && typeof btn._veritasRunCheckAi === "function" && !btn.disabled) {
+            btn._veritasRunCheckAi();
+          }
+        },
+        true
+      );
+    }
+  }
+
   function attachCheckAiToHost(host, captureRoot) {
     if (host.querySelector(".veritas-check-ai-btn")) return;
+    ensureIgReelWindowGuard();
 
     const row = document.createElement("div");
     row.className = "veritas-check-ai-row";
@@ -1823,28 +2120,29 @@
     btn.type = "button";
     btn.className = "veritas-check-ai-btn";
     btn.textContent = "Check AI";
-    btn.addEventListener("click", async () => {
+
+    btn._veritasRunCheckAi = async () => {
+      if (btn.disabled) return;
       resetCheckAiButton(btn);
       const panel = mountCheckAiPanel(host);
       delete panel.dataset.veritasCheckAiDismissed;
       panel.textContent = "";
-      panel.appendChild(buildCheckAiBackBar(panel, btn));
       const loadingCard = document.createElement("div");
       loadingCard.className = "veritas-check-ai-card veritas-check-ai-card--loading";
       loadingCard.textContent = "Analyzing image…";
       panel.appendChild(loadingCard);
       btn.disabled = true;
       try {
-        const payload = captureMediaForCheckAi(captureRoot);
+        const liveRoot = host._veritasCaptureRoot || captureRoot;
+        const payload = await captureMediaForCheckAi(liveRoot, { hideEls: [host] });
         const result = await checkAiAnalyze(payload);
         if (panel.dataset.veritasCheckAiDismissed === "1") return;
-        renderCheckAiResult(panel, result, btn);
+        renderCheckAiResult(panel, result);
         setCheckAiButtonAfterResult(btn, result);
       } catch (e) {
         if (panel.dataset.veritasCheckAiDismissed === "1") return;
         const msg = escapeHtml(String(e?.message || e));
         panel.textContent = "";
-        panel.appendChild(buildCheckAiBackBar(panel, btn));
         const errCard = document.createElement("div");
         errCard.className = "veritas-check-ai-card veritas-check-ai-card--err";
         errCard.textContent = msg;
@@ -1853,9 +2151,38 @@
       } finally {
         btn.disabled = false;
       }
+    };
+
+    /* Feed/article toolbars: normal click. Reel portal: window guard runs this instead. */
+    btn.addEventListener("click", (ev) => {
+      if (host.getAttribute("data-veritas-reel-checkai-host") === "1") return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      btn._veritasRunCheckAi();
     });
+
     row.appendChild(btn);
     host.appendChild(row);
+  }
+
+  /** Pin the portal to the reel video’s top-right (viewport coords). */
+  function positionReelCheckAiHost(hostEl, video) {
+    if (!hostEl || !video || !video.isConnected) return;
+    const r = video.getBoundingClientRect();
+    if (r.width < 40 || r.height < 40) return;
+    const pad = 10;
+    const width = Math.min(340, Math.max(140, r.width - pad * 2));
+    let top = r.top + pad;
+    let left = r.right - width - pad;
+    top = Math.max(8, Math.min(top, window.innerHeight - 48));
+    left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+    hostEl.style.position = "fixed";
+    hostEl.style.top = `${Math.round(top)}px`;
+    hostEl.style.left = `${Math.round(left)}px`;
+    hostEl.style.right = "auto";
+    hostEl.style.bottom = "auto";
+    hostEl.style.width = `${Math.round(width)}px`;
+    hostEl.style.zIndex = "2147483646";
   }
 
   function findPrimaryInstagramReelVideo() {
@@ -1886,11 +2213,13 @@
   }
 
   /**
-   * Instagram Reels full-screen player usually has no <article>, so feed scanning never runs.
-   * Mount a top-right overlay on the main reel video's parent.
+   * Instagram Reels: mount Check AI as a fixed portal on document.body.
+   * Must NOT live under the video tree — IG’s pause/play hit-layer sits above
+   * in-player children and steals clicks (reel pauses instead of Check AI).
    */
   function scanInstagramReelCheckAi() {
     if (!isInstagram) return;
+    if (window.self !== window.top) return;
     injectStyleOnce();
 
     if (!isInstagramReelSurface()) {
@@ -1898,39 +2227,38 @@
       return;
     }
 
-    document.querySelectorAll("[data-veritas-reel-checkai-host]").forEach((host) => {
-      const token = host.getAttribute("data-veritas-for-video");
+    document.querySelectorAll("[data-veritas-reel-checkai-host]").forEach((hostEl) => {
+      const token = hostEl.getAttribute("data-veritas-for-video");
       const still = token && document.querySelector(`video[data-veritas-reel-id="${token}"]`);
-      if (!still) host.remove();
+      if (!still) hostEl.remove();
     });
 
     const video = findPrimaryInstagramReelVideo();
     if (!video) return;
 
     const token = ensureReelVideoToken(video);
-    const existing = document.querySelector(
+    let hostEl = document.querySelector(
       `[data-veritas-reel-checkai-host][data-veritas-for-video="${token}"]`
     );
-    if (existing && existing.isConnected) return;
 
-    document.querySelectorAll(`[data-veritas-reel-checkai-host][data-veritas-for-video="${token}"]`).forEach((n) => {
-      if (n !== existing) n.remove();
-    });
+    /* Migrate old absolute-in-player mounts (under IG video tree) → body portal. */
+    if (hostEl && hostEl.parentElement !== document.body) {
+      hostEl.remove();
+      hostEl = null;
+    }
 
-    const parent = video.parentElement;
-    if (!parent) return;
+    if (!hostEl) {
+      document.querySelectorAll("[data-veritas-reel-checkai-host]").forEach((n) => n.remove());
+      hostEl = document.createElement("div");
+      hostEl.setAttribute("data-veritas-reel-checkai-host", "1");
+      hostEl.setAttribute("data-veritas-for-video", token);
+      hostEl.className = "veritas-ig-reel-overlay";
+      document.body.appendChild(hostEl);
+      attachCheckAiToHost(hostEl, video);
+    }
 
-    const cs = getComputedStyle(parent);
-    if (cs.position === "static") parent.style.position = "relative";
-
-    const host = document.createElement("div");
-    host.setAttribute("data-veritas-reel-checkai-host", "1");
-    host.setAttribute("data-veritas-for-video", token);
-    host.className = "veritas-ig-reel-overlay";
-
-    const captureRoot = parent;
-    parent.appendChild(host);
-    attachCheckAiToHost(host, captureRoot);
+    hostEl._veritasCaptureRoot = video;
+    positionReelCheckAiHost(hostEl, video);
   }
 
   function findCandidatePosts() {
@@ -2141,26 +2469,6 @@
       panel.textContent = "";
       const logo = getFactCheckLogoButton(panel);
       if (logo) logo.disabled = false;
-    });
-    wrap.appendChild(back);
-    return wrap;
-  }
-
-  function buildCheckAiBackBar(panel, btn) {
-    const wrap = document.createElement("div");
-    wrap.className = "veritas-check-ai-topbar";
-    const back = document.createElement("button");
-    back.type = "button";
-    back.className = "veritas-check-ai-back-btn";
-    back.setAttribute("aria-label", "Back");
-    back.title = "Close";
-    back.innerHTML = '<span aria-hidden="true">←</span> Back';
-    back.addEventListener("click", (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      panel.dataset.veritasCheckAiDismissed = "1";
-      panel.textContent = "";
-      resetCheckAiButton(btn);
     });
     wrap.appendChild(back);
     return wrap;
@@ -2678,6 +2986,21 @@
       scanInstagram._t = window.setTimeout(runIg, 500);
     });
     obs.observe(document.documentElement, { childList: true, subtree: true });
+    /* Keep the fixed Check AI portal glued to the reel while IG scrolls/resizes. */
+    let reelPosRaf = 0;
+    const repositionReelPortal = () => {
+      if (reelPosRaf) return;
+      reelPosRaf = requestAnimationFrame(() => {
+        reelPosRaf = 0;
+        if (!isInstagramReelSurface()) return;
+        const hostEl = document.querySelector("[data-veritas-reel-checkai-host]");
+        const video = hostEl?._veritasCaptureRoot || findPrimaryInstagramReelVideo();
+        if (hostEl && video) positionReelCheckAiHost(hostEl, video);
+        else scanInstagramReelCheckAi();
+      });
+    };
+    window.addEventListener("scroll", repositionReelPortal, true);
+    window.addEventListener("resize", repositionReelPortal);
     return;
   }
 

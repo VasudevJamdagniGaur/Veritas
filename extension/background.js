@@ -283,12 +283,53 @@ function analyzeTextViaApi(text, username, userId, source) {
     });
 }
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+/**
+ * Capture the visible tab as JPEG (used when Instagram/CDN video frames
+ * cannot be read via canvas due to CORS taint).
+ * @param {number|undefined} windowId
+ * @returns {Promise<string>} data URL
+ */
+function captureVisibleTabDataUrl(windowId) {
+  const opts = { format: "jpeg", quality: 88 };
+  if (typeof chrome !== "undefined" && chrome.tabs?.captureVisibleTab) {
+    return new Promise((resolve, reject) => {
+      try {
+        const cb = (dataUrl) => {
+          const err = chrome.runtime?.lastError;
+          if (err) {
+            reject(new Error(err.message || String(err)));
+            return;
+          }
+          if (!dataUrl) {
+            reject(new Error("Tab capture returned empty image"));
+            return;
+          }
+          resolve(dataUrl);
+        };
+        if (typeof windowId === "number") chrome.tabs.captureVisibleTab(windowId, opts, cb);
+        else chrome.tabs.captureVisibleTab(opts, cb);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+  return Promise.reject(new Error("tabs.captureVisibleTab is unavailable"));
+}
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const t = msg?.type;
 
   if (t === "VERITAS_ANALYZE" && typeof msg.text === "string" && msg.text.length > 0) {
     analyzeTextViaApi(msg.text, msg.username, msg.userId, msg.source)
       .then((data) => sendResponse({ ok: true, data }))
+      .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+    return true;
+  }
+
+  if (t === "VERITAS_CAPTURE_TAB") {
+    const windowId = sender?.tab?.windowId;
+    captureVisibleTabDataUrl(windowId)
+      .then((dataUrl) => sendResponse({ ok: true, dataUrl }))
       .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
     return true;
   }
